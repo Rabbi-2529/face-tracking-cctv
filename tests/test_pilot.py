@@ -270,3 +270,31 @@ def test_readiness_is_on_the_accuracy_page(client, users, camera):
     response = client.get(reverse("tracking:accuracy"))
     assert response.context["readiness"]["checks"]
     assert "Pilot readiness" in response.content.decode()
+
+
+def test_recommendation_never_goes_below_the_safety_floor():
+    """Two easy identities make every threshold look safe. The recommender
+    must not turn that into a 0.00 threshold."""
+    from vision.benchmark import FLOOR_HIGH, FLOOR_LOW, recommend
+
+    genuine = np.full(40, 0.92, dtype=np.float32)
+    impostor = np.full(40, -0.02, dtype=np.float32)
+    result = recommend(genuine, impostor, identities=2)
+
+    assert result["high"] >= FLOOR_HIGH and result["low"] >= FLOOR_LOW
+    assert result["floored"] is True
+    assert result["sufficient"] is False
+    assert len(result["insufficient_reasons"]) == 2
+
+
+def test_recommendation_is_trusted_only_with_enough_comparisons():
+    from vision.benchmark import recommend
+
+    rng = np.random.default_rng(3)
+    genuine = rng.uniform(0.5, 0.95, 3000).astype(np.float32)
+    impostor = rng.uniform(-0.2, 0.42, 5000).astype(np.float32)
+    result = recommend(genuine, impostor, identities=25)
+
+    assert result["sufficient"] is True
+    assert 0.42 <= result["high"] <= 0.44
+    assert result["far_at_high"] <= 0.001

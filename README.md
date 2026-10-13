@@ -197,6 +197,18 @@ make dbshell           # psql
 make health            # readiness probe
 ```
 
+**After pulling changes, restart every Django-tier service, not just web:**
+
+```bash
+make migrate && make restart
+```
+
+`make restart` covers `web`, `worker`, `beat` and `aggregator`. A service
+left on the old code fails against a migrated schema. The aggregator replays
+any events it failed on its next start, so nothing is lost, but nothing is
+processed until it restarts either. Template edits also need a `web` restart:
+compiled templates are cached.
+
 ### GPU
 
 ```bash
@@ -370,7 +382,7 @@ weeks, a go / no-go decision on measured numbers. The tools it uses:
 | Tool | What it answers |
 |---|---|
 | `/accuracy/` (Developer, Admin) | Per camera: gate rate, probable share, capability. Per zone: accepted wrong IDs, implausible arrivals. A **threshold what-if** over real match scores, next to the highest score of any identification reviewers confirmed was wrong. |
-| `make benchmark data=/samples/benchmark` | Accuracy against a labelled photo set from your own cameras: TAR/FAR, recommended thresholds, and pass/fail against the plan's targets (>= 95% correct, <= 2% confirmed-wrong). |
+| `make benchmark data=samples/benchmark` | Accuracy against a labelled photo set from your own cameras: TAR/FAR, recommended thresholds, and pass/fail against the plan's targets (>= 95% correct, <= 2% confirmed-wrong). |
 | `make pilot-check` (also on `/accuracy/`) | The runbook's "before day 1" list checked against live data: site, cameras, people, governance, tuning. |
 | `make loadtest cams=20 fps=4 secs=60` | Whether the aggregator keeps up at the rollout camera count. Synthetic unknown-face events only; cleaned up afterwards. |
 

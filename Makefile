@@ -127,14 +127,14 @@ audit: ## Camera viability audit. Run this before anything else. make audit secs
 	$(COMPOSE) --profile vision run --rm vision \
 	  python scripts/camera_audit.py --seconds $${secs:-60} --save
 
-benchmark: ## Accuracy against a labelled set. make benchmark data=/samples/benchmark
-	$(COMPOSE) --profile vision run --rm vision 	  python scripts/benchmark_accuracy.py --data $${data:-/samples/benchmark} --json /samples/benchmark-result.json
+benchmark: ## Accuracy against a labelled set. make benchmark data=samples/benchmark
+	$(COMPOSE) run --rm --no-deps web python scripts/benchmark_accuracy.py --data $${data:-samples/benchmark} --json samples/benchmark-result.json
 
 pilot-check: ## Pilot readiness checklist against live data
 	$(COMPOSE) exec web python manage.py pilot_check
 
 loadtest: ## Aggregator throughput. make loadtest cams=20 fps=4 secs=60 (never on production)
-	$(COMPOSE) --profile vision run --rm vision 	  python scripts/load_test.py --cameras $${cams:-10} --fps $${fps:-4} --seconds $${secs:-30} --not-production
+	$(COMPOSE) --profile vision run --rm vision python scripts/load_test.py --cameras $${cams:-10} --fps $${fps:-4} --seconds $${secs:-30} --not-production
 	$(COMPOSE) exec web python manage.py purge_load_test
 
 # ------------------------------------------------------------------- quality

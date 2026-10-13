@@ -89,32 +89,64 @@ def sweep(genuine: np.ndarray, impostor: np.ndarray, step: float = 0.01) -> list
     return rows
 
 
+# Never recommend thresholds below these, whatever the data says. A small or
+# easy test set can make any threshold look safe; these floors stop a
+# benchmark on thin data from talking anyone into confidently naming the
+# wrong person. (The Matching page refuses a confirmed threshold under 0.30.)
+FLOOR_HIGH = 0.40
+FLOOR_LOW = 0.25
+# A false-accept rate of 1 in N cannot be measured from fewer than N
+# wrong-person comparisons, and a handful of people is not a population.
+MIN_IDENTITIES = 10
+
+
 def recommend(
     genuine: np.ndarray,
     impostor: np.ndarray,
     *,
     target_far: float = 0.001,
     keep_genuine: float = 0.99,
+    identities: int | None = None,
 ) -> dict:
-    """Suggested thresholds.
+    """Suggested thresholds, and whether the data can support them.
 
     ``high`` (confirmed): the lowest threshold at which no more than
     ``target_far`` of impostor comparisons pass - so a confirmed match is
-    almost never the wrong person.
+    almost never the wrong person - but never below ``FLOOR_HIGH``.
     ``low`` (probable): low enough to keep ``keep_genuine`` of true matches
-    above "unknown", but always below ``high``.
+    above "unknown", always below ``high`` and never below ``FLOOR_LOW``.
+
+    ``sufficient`` is False when there are too few impostor comparisons to
+    measure ``target_far``, or too few people; the caller should then keep
+    its current thresholds and collect more data.
     """
     rows = sweep(genuine, impostor)
-    high = next((r["threshold"] for r in rows if r["far"] <= target_far), 1.0)
+    measured_high = next((r["threshold"] for r in rows if r["far"] <= target_far), 1.0)
+    high = round(max(measured_high, FLOOR_HIGH), 2)
     low = float(np.quantile(genuine, 1 - keep_genuine)) if genuine.size else high - 0.15
-    low = round(min(low, high - 0.05), 2)
-    at_high = next(r for r in rows if r["threshold"] == high)
+    low = round(max(min(low, high - 0.05), FLOOR_LOW), 2)
+    at_high = next(r for r in rows if abs(r["threshold"] - high) < 1e-9)
+
+    needed = int(np.ceil(1 / target_far)) if target_far > 0 else 0
+    reasons = []
+    if impostor.size < needed:
+        reasons.append(
+            f"only {impostor.size} wrong-person comparisons; at least {needed} are "
+            f"needed to measure a {target_far:.1%} false-accept rate"
+        )
+    if identities is not None and identities < MIN_IDENTITIES:
+        reasons.append(f"only {identities} people; use at least {MIN_IDENTITIES}")
+
     return {
         "high": high,
-        "low": max(low, 0.0),
+        "low": low,
+        "measured_high": measured_high,
+        "floored": high > measured_high,
         "tar_at_high": at_high["tar"],
         "far_at_high": at_high["far"],
         "target_far": target_far,
+        "sufficient": not reasons,
+        "insufficient_reasons": reasons,
     }
 
 

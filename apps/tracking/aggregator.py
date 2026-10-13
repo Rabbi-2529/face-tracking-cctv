@@ -643,6 +643,42 @@ class AggregatorRunner:
                 finally:
                     self.client.xack(self.health_stream, self.group, message_id)
 
+    def recover_pending(self) -> int:
+        """Re-process events this consumer read earlier but never acknowledged.
+
+        A failed event is deliberately left unacknowledged - but reading with
+        ">" only ever returns new events, so without this step a failure is
+        never retried. That happens for real: a deploy that changes the
+        schema leaves the old aggregator failing every event until restart.
+
+        Walks the pending list once with an advancing cursor, so an event
+        that still fails stays pending (and visible in XPENDING) instead of
+        being retried in a tight loop.
+        """
+        recovered = 0
+        cursor = "0"
+        while not self._stop:
+            try:
+                batches = self.client.xreadgroup(
+                    groupname=self.group,
+                    consumername=self.consumer_name,
+                    streams={self.stream: cursor},
+                    count=self.batch_size,
+                )
+            except redis.RedisError:
+                logger.warning("could not read pending events; continuing with new ones")
+                break
+            messages = batches[0][1] if batches else []
+            if not messages:
+                break
+            before = self.aggregator.stats.errors
+            self._process_messages(messages)
+            recovered += len(messages) - (self.aggregator.stats.errors - before)
+            cursor = messages[-1][0]
+        if recovered:
+            logger.info("recovered %s pending event(s) from before the restart", recovered)
+        return recovered
+
     def run(self) -> None:
         self.install_signal_handlers()
         self.ensure_group()
@@ -652,6 +688,7 @@ class AggregatorRunner:
             self.stream,
             self.group,
         )
+        self.recover_pending()
 
         last_report = time.monotonic()
 
@@ -700,8 +737,9 @@ class AggregatorRunner:
             try:
                 self.aggregator.handle(payload)
             except Exception:
-                # Do not ack: the message stays pending and can be claimed
-                # and retried, or inspected with XPENDING.
+                # Do not ack: the message stays pending, is retried by
+                # recover_pending() on the next start, and can be inspected
+                # with XPENDING meanwhile.
                 logger.exception("failed to process event %s", message_id)
                 self.aggregator.stats.errors += 1
                 continue

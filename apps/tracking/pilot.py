@@ -109,12 +109,28 @@ def check_cameras() -> list[Check]:
         "Run `make audit secs=120`, then reposition anything under 60px before the pilot." if parts else "",
     ))
 
-    audited = set(CameraAuditResult.objects.values_list("camera_id", flat=True))
-    not_audited = [c.code for c in identity if c.pk not in audited]
+    # What the most recent audit of each identity camera actually found -
+    # having *a* result is not the same as having a good one.
+    latest: dict[int, CameraAuditResult] = {}
+    for result in CameraAuditResult.objects.filter(camera__in=identity).order_by("camera_id", "-ran_at"):
+        latest.setdefault(result.camera_id, result)
+    not_audited = [c.code for c in identity if c.pk not in latest]
+    unseen = [c.code for c in identity if c.pk in latest and latest[c.pk].verdict == "unusable"]
+    too_small = [c.code for c in identity if c.pk in latest and latest[c.pk].verdict == "presence_only"]
+    usable = [c.code for c in identity if c.pk in latest and latest[c.pk].verdict in ("identity_ok", "marginal")]
+    problems = []
+    if too_small:
+        problems.append(f"faces too small to identify: {_names(too_small)}")
+    if unseen:
+        problems.append(f"no face seen (stream unreachable or empty): {_names(unseen)}")
+    if not_audited:
+        problems.append(f"never audited: {_names(not_audited)}")
     checks.append(Check(
-        "Cameras", "Camera audit run", WARN if not_audited else PASS,
-        f"No audit result for {_names(not_audited)}." if not_audited else "Every identity camera has an audit result.",
-        "Run `make audit secs=120`." if not_audited else "",
+        "Cameras", "Latest audit can identify faces",
+        FAIL if too_small or not usable else WARN if problems else PASS,
+        (f"{len(usable)} of {len(identity)} identity cameras passed their latest audit; " + "; ".join(problems) + ".")
+        if problems else f"All {len(identity)} identity cameras passed their latest audit.",
+        "Fix the stream or move the camera, then run `make audit secs=120` during working hours." if problems else "",
     ))
 
     offline = [f"{c.code} ({c.status})" for c in cameras if c.status != Camera.Status.ONLINE]

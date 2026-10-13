@@ -42,7 +42,7 @@ who signed the criteria.
    below) and run:
 
    ```bash
-   make benchmark data=/samples/benchmark
+   make benchmark data=samples/benchmark
    ```
 
    Record both the "current" and "recommended" results.
@@ -97,6 +97,12 @@ samples/benchmark/
 - These are biometric images of real people: only participants who consented
   to the test, kept on the server (`samples/` is git-ignored), deleted after
   the pilot.
+- To check the tooling before real data exists, generate a synthetic set from
+  the fixture portraits:
+  `docker compose run --rm web python scripts/make_synthetic_benchmark.py`.
+  With two identities the benchmark will (correctly) refuse to recommend
+  thresholds - it needs at least 10 people and 1,000 wrong-person comparisons
+  before its recommendation means anything.
 
 ## After the pilot
 

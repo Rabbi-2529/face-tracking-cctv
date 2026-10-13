@@ -286,3 +286,54 @@ def test_retention_removes_clusters_not_seen_recently(db, settings):
 
     assert results["unknown_clusters_deleted"] == 1
     assert UnknownFaceCluster.objects.get().last_seen == now
+
+
+# ---------------------------------------------------------- restart recovery
+
+
+class _PendingRedis:
+    """Just enough of a Redis client to replay a consumer's pending list."""
+
+    def __init__(self, pending):
+        self.pending = list(pending)  # [(id, fields)]
+        self.acked: list[str] = []
+
+    def xreadgroup(self, groupname, consumername, streams, count=None, block=None):
+        cursor = next(iter(streams.values()))
+        if cursor == ">":
+            return []
+        after = [m for m in self.pending if cursor == "0" or m[0] > cursor]
+        return [("events:detections", after[:count])] if after else []
+
+    def xack(self, stream, group, message_id):
+        self.acked.append(message_id)
+        self.pending = [m for m in self.pending if m[0] != message_id]
+
+
+def test_events_left_pending_by_a_crash_are_processed_on_restart(
+    cameras, employees, broadcasts, noon
+):
+    import json
+
+    from apps.tracking.aggregator import AggregatorRunner
+    from apps.tracking.models import Detection
+
+    good = _event(cameras["office"], noon, employee=employees["eng"])
+    broken = {"v": 1, "camera_code": cameras["office"].code}  # no captured_at
+    runner = AggregatorRunner(consumer_name="test-1")
+    runner.client = _PendingRedis(
+        [
+            ("1-0", {"data": json.dumps(good)}),
+            ("2-0", {"data": json.dumps(broken)}),
+            ("3-0", {"data": json.dumps({**good, "track_id": "t-9"})}),
+        ]
+    )
+
+    recovered = runner.recover_pending()
+
+    assert recovered == 2
+    assert Detection.objects.count() == 2
+    assert runner.client.acked == ["1-0", "3-0"]
+    # The broken event stays pending for inspection, and the walk ended
+    # rather than retrying it in a loop.
+    assert [m[0] for m in runner.client.pending] == ["2-0"]

@@ -74,6 +74,10 @@ class CameraWorker:
         # Most recent frame kept for snapshot writing, so a snapshot is cut
         # from the frame the decision was actually made on.
         self._last_frame = None
+        # Set properly by open_stream(); a live stream until told otherwise.
+        self.is_file = False
+        self.file_frame_seconds = 1.0 / 25
+        self.next_file_frame_at = 0.0
 
         from vision.gallery import Gallery
         from vision.pipeline import FacePipeline
@@ -124,9 +128,18 @@ class CameraWorker:
             logger.error("[%s] could not open stream", self.spec.code)
             return False
 
+        # A video file (the test fixture camera) is played back like a camera:
+        # at its own frame rate, looping. Read flat out, a 20-second clip is
+        # over in two seconds and the worker then sits "stalled" for ten.
+        self.is_file = not self.spec.rtsp_url.lower().startswith(("rtsp", "http"))
+        file_fps = self.capture.get(cv2.CAP_PROP_FPS) if self.is_file else 0
+        self.file_frame_seconds = 1.0 / file_fps if file_fps and file_fps > 0 else 1.0 / 25
+        self.next_file_frame_at = time.monotonic()
+
         logger.info(
-            "[%s] stream open (%sx%s requested, sampling at %.1f fps)",
+            "[%s] %s open (%sx%s requested, sampling at %.1f fps)",
             self.spec.code,
+            "video file" if self.is_file else "stream",
             self.spec.width,
             self.spec.height,
             self.spec.sample_fps,
@@ -165,8 +178,22 @@ class CameraWorker:
                     time.sleep(min(30, 2 * self.reconnects))
                 continue
 
+            if self.is_file:
+                # Pace playback to the file's own frame rate.
+                wait = self.next_file_frame_at - now
+                if wait > 0:
+                    time.sleep(wait)
+                self.next_file_frame_at = max(self.next_file_frame_at, now) + self.file_frame_seconds
+
             ok, frame = self.capture.read()
             if not ok or frame is None:
+                if self.is_file:
+                    # End of the clip: loop, as a camera would keep streaming.
+                    import cv2
+
+                    self.capture.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                    self.last_frame_at = time.monotonic()
+                    continue
                 self.frames_dropped += 1
                 time.sleep(0.05)
                 continue

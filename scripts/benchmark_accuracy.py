@@ -107,9 +107,15 @@ def main() -> int:
     gallery = Gallery.build(templates)
     enrolled = [(label, e) for label, e in probes if label in templates]
     genuine, impostor = score_distributions(gallery, enrolled)
-    suggestion = recommend(genuine, impostor, target_far=args.target_far)
+    suggestion = recommend(
+        genuine, impostor, target_far=args.target_far, identities=len(templates)
+    )
     current = identify(gallery, probes, high=args.high, low=args.low)
-    proposed = identify(gallery, probes, high=suggestion["high"], low=suggestion["low"])
+    if suggestion["sufficient"]:
+        proposed = identify(gallery, probes, high=suggestion["high"], low=suggestion["low"])
+    else:
+        # Too little data to justify moving: report against the current values.
+        proposed = current
 
     print(f"\nGallery: {len(templates)} people, {len(gallery.labels)} templates "
           f"({len(skipped_gallery)} images rejected by the enrolment gate)")
@@ -120,10 +126,23 @@ def main() -> int:
     print(f"Scores:  genuine median {float(_median(genuine)):.3f}, "
           f"impostor 99.9th pct {float(_quantile(impostor, 0.999)):.3f}")
 
-    print(f"\nRecommended: confirmed >= {suggestion['high']:.2f}  probable >= {suggestion['low']:.2f}"
-          f"   (TAR {suggestion['tar_at_high']:.1%}, FAR {suggestion['far_at_high']:.2%})")
+    if suggestion["sufficient"]:
+        print(f"\nRecommended: confirmed >= {suggestion['high']:.2f}  probable >= {suggestion['low']:.2f}"
+              f"   (TAR {suggestion['tar_at_high']:.1%}, FAR {suggestion['far_at_high']:.2%})")
+        if suggestion["floored"]:
+            print(f"  (the data alone pointed at {suggestion['measured_high']:.2f}; "
+                  "raised to the safety floor)")
+    else:
+        print("\nNo recommendation: not enough data to move the thresholds safely.")
+        for reason in suggestion["insufficient_reasons"]:
+            print(f"  - {reason}")
+        print(f"  Keeping the current thresholds ({args.high:.2f} / {args.low:.2f}). "
+              "Collect more people and probes from the pilot cameras.")
 
-    for title, report in (("current", current), ("recommended", proposed)):
+    reports = [("current", current)]
+    if suggestion["sufficient"]:
+        reports.append(("recommended", proposed))
+    for title, report in reports:
         r = report
         print(f"\nAt {title} thresholds (confirmed {r.high:.2f}, probable {r.low:.2f}):")
         print(f"  enrolled probes {r.enrolled_probes}: confirmed correct {r.confirmed_correct}, "
@@ -145,7 +164,8 @@ def main() -> int:
         }, indent=2))
         print(f"\nwrote {args.json}")
 
-    return 0 if proposed.passes else 1
+    # Exit 0 only for a pass that rests on enough data to mean something.
+    return 0 if proposed.passes and suggestion["sufficient"] else 1
 
 
 def _median(values):
