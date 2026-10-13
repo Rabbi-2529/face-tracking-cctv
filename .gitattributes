@@ -8,3 +8,7 @@
 *.jpeg binary
 *.mp4 binary
 *.onnx binary
+
+# Vendored libraries are verified by SHA-256 (static/vendor/MANIFEST.json):
+# store them byte-for-byte, never line-ending-normalised.
+static/vendor/** -text
