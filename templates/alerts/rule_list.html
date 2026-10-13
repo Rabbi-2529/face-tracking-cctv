@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Alert rules{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Alert rules</h1>
+    <p class="muted">What raises an alert. Rules act on confirmed matches only; a
+       probable match never alerts on its own.</p>
+  </div>
+  <div class="head-actions">
+    {% if 'alert.ack' in granted_actions %}<a href="{% url 'alerts:inbox' %}">Inbox</a>{% endif %}
+    <a class="button" href="{% url 'alerts:rule_create' %}">New rule</a>
+  </div>
+</div>
+<table class="grid">
+  <thead><tr><th>Rule</th><th>Type</th><th>Where</th><th>Detail</th><th>Severity</th><th>Enabled</th><th></th></tr></thead>
+  <tbody>
+    {% for r in rules %}
+      <tr {% if not r.is_enabled %}class="muted"{% endif %}>
+        <td>{{ r.name }}</td>
+        <td class="small">{{ r.get_rule_type_display }}</td>
+        <td class="small">{% if r.zone %}{{ r.zone.name }}{% elif r.rule_type == 'restricted_zone' or r.rule_type == 'unknown_face' %}every restricted zone{% else %}every zone{% endif %}</td>
+        <td class="small">
+          {% if r.rule_type == 'restricted_zone' %}authorised: {% for d in r.authorised_departments.all %}{{ d.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">no department</span>{% endfor %}
+          {% elif r.rule_type == 'after_hours' %}{% if r.after_hours_start %}{{ r.after_hours_start|time:"H:i" }}-{{ r.after_hours_end|time:"H:i" }}{% endif %}{% if r.weekends_count %} + weekends{% endif %}
+          {% endif %}
+        </td>
+        <td class="small">{{ r.get_severity_display }}</td>
+        <td>{% if r.is_enabled %}<span class="ok">yes</span>{% else %}no{% endif %}</td>
+        <td><a href="{% url 'alerts:rule_edit' r.pk %}">Edit</a></td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">No rules yet, so nothing raises an alert.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

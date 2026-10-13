@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Matching settings{% endblock %}
+{% block content %}
+<h1>Matching settings</h1>
+<p class="muted">How the pipeline decides who a face belongs to.</p>
+
+<div class="banner warn">
+  <b>These defaults are a starting point, not a tuned configuration.</b>
+  Published thresholds do not transfer between camera estates. Tune them
+  against a labelled set of frames from your own cameras, and watch the
+  correction queue for several days after any change.
+</div>
+
+<section class="card">
+  <h2>Current</h2>
+  <dl class="kv">
+    <dt>Confirmed at or above</dt><dd>{{ config.match_threshold_high }} cosine similarity</dd>
+    <dt>Probable at or above</dt><dd>{{ config.match_threshold_low }}</dd>
+    <dt>Below that</dt><dd>recorded as an unknown face</dd>
+    <dt>Frames voted per track</dt><dd>{{ config.vote_window }}</dd>
+    <dt>Minimum face size</dt><dd>{{ config.min_face_px }} px</dd>
+    <dt>Minimum quality</dt><dd>{{ config.min_quality_score }}</dd>
+    <dt>Presence gap</dt><dd>{{ config.presence_gap_seconds }} s before a stay is closed</dd>
+    <dt>Model</dt><dd><code>{{ config.model_version }}</code></dd>
+    <dt>Last changed</dt>
+    <dd>{{ config.updated_at|date:"j M Y H:i" }}
+        {% if config.changed_by %}by {{ config.changed_by.email }}{% endif %}
+        {% if config.change_reason %}<div class="muted small">{{ config.change_reason }}</div>{% endif %}</dd>
+  </dl>
+</section>
+
+{% if can_edit %}
+<form method="post" class="card stacked">
+  {% csrf_token %}
+  <h2>Change</h2>
+  {{ form.non_field_errors }}
+  {% for f in form %}
+    <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+      {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+  {% endfor %}
+  <div class="form-actions"><button type="submit">Save thresholds</button></div>
+  <p class="muted small">
+    Workers pick up changes within 30 seconds. Raising the confirmed threshold
+    reduces wrong names but leaves more people unidentified; lowering it does
+    the opposite.
+  </p>
+</form>
+{% else %}
+<p class="muted">Only the Developer role can change these.</p>
+{% endif %}
+{% endblock %}

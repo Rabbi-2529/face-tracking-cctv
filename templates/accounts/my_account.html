@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}My account{% endblock %}
+{% block content %}
+<h1>My account</h1>
+
+<section class="card">
+  <h2>Access</h2>
+  <dl class="kv">
+    <dt>Role</dt><dd>{{ role_label }}</dd>
+    <dt>Authenticator</dt>
+    <dd>
+      {% if has_mfa %}enrolled
+        &middot; {{ backup_codes_left }} backup code{{ backup_codes_left|pluralize }} left
+      {% elif mfa_required %}<b class="bad">required, not enrolled</b>
+        &mdash; <a href="{% url 'accounts:mfa_setup' %}">enrol now</a>
+      {% else %}not enrolled &mdash; <a href="{% url 'accounts:mfa_setup' %}">enrol</a>{% endif %}
+    </dd>
+    <dt>Department scope</dt>
+    <dd>{% for d in scope_departments %}{{ d.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">none</span>{% endfor %}</dd>
+    <dt>Zone scope</dt>
+    <dd>{% for z in scope_zones %}{{ z.name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">none</span>{% endfor %}</dd>
+  </dl>
+  {% if has_mfa %}
+    <form method="post" action="{% url 'accounts:mfa_backup_codes' %}" class="inline-form">
+      {% csrf_token %}
+      <button type="submit">Issue new backup codes</button>
+      <span class="muted small">Replaces any you have now.</span>
+    </form>
+  {% endif %}
+  <details>
+    <summary>Permissions granted to me ({{ granted_actions|length }})</summary>
+    <ul class="cols">{% for a in granted_actions %}<li><code>{{ a }}</code></li>{% endfor %}</ul>
+  </details>
+</section>
+
+{% if can_request_elevation or elevations %}
+<section class="card">
+  <div class="page-head">
+    <h2>Break-glass access</h2>
+    {% if can_request_elevation %}<a class="button" href="{% url 'accounts:elevation_request' %}">Request access</a>{% endif %}
+  </div>
+  <p class="muted small">Time-boxed identity access for debugging production,
+     approved by someone else and recorded. It ends by itself.</p>
+  <table class="grid">
+    <thead><tr><th>Requested</th><th>Capabilities</th><th>Status</th><th>Ends</th></tr></thead>
+    <tbody>
+      {% for e in elevations %}
+        <tr><td class="small">{{ e.requested_at|date:"j M H:i" }}</td>
+            <td class="small">{% for a in e.actions %}<code>{{ a }}</code> {% endfor %}</td>
+            <td class="small">{{ e.get_status_display }}{% if e.is_live %} <b class="ok">(live)</b>{% endif %}</td>
+            <td class="small">{{ e.expires_at|date:"j M H:i"|default:"-" }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="muted">None.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if employee %}
+<section class="card">
+  <h2>What the system holds about me</h2>
+  <dl class="kv">
+    <dt>Employee</dt><dd>{{ employee.full_name }} ({{ employee.employee_code }})</dd>
+    <dt>Consent</dt>
+    <dd>
+      {% if consent %}version {{ consent.policy_version }}, given
+        {{ consent.consented_at|date:"j M Y" }} ({{ consent.get_method_display|lower }})
+      {% else %}<b class="bad">no active consent on file</b> &mdash; you are not being
+        matched by the cameras{% endif %}
+    </dd>
+    <dt>Enrolled face images</dt><dd>{{ enrollments|length }} in use</dd>
+  </dl>
+
+  {% if enrollments %}
+    <div class="own-gallery">
+      {% for e in enrollments %}
+        <figure>
+          <img src="{% url 'accounts:own_enrollment_image' e.uuid %}" alt="Enrolled image, {{ e.get_pose_display|lower }}" loading="lazy">
+          <figcaption class="small muted">{{ e.get_pose_display }} &middot; added {{ e.created_at|date:"j M Y" }}</figcaption>
+        </figure>
+      {% endfor %}
+    </div>
+    <p class="muted small">If a photo here is not you, tell HR - it would make
+       the system mistake someone else for you.</p>
+  {% endif %}
+
+  <p><a href="{% url 'tracking:employee_timeline' employee.uuid %}">View my own movement history</a></p>
+  <p class="muted small">If any record about you is wrong, use the report link on
+     the timeline. You have a right to have it corrected.</p>
+</section>
+
+<section class="card">
+  <h2>Tracking requests about me</h2>
+  <p class="muted small">Requests by anyone to look at your movements. A request
+     is only hidden from you while an approver has formally recorded that telling
+     you would defeat an active investigation.</p>
+  <table class="grid">
+    <thead><tr><th>Requested</th><th>Purpose</th><th>Status</th><th>By</th></tr></thead>
+    <tbody>
+      {% for r in tracking_requests_about_me %}
+        <tr><td class="small">{{ r.requested_at|date:"j M Y" }}</td>
+            <td class="small">{{ r.get_purpose_display }}</td>
+            <td class="small">{{ r.get_status_display }}</td>
+            <td class="small">{{ r.requested_by.full_name|default:r.requested_by.email }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="muted">None.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Recent sign-ins</h2>
+  <table class="grid">
+    <thead><tr><th>When</th><th>Address</th><th>Device</th></tr></thead>
+    <tbody>
+      {% for l in logins %}
+        <tr><td>{{ l.at|date:"j M Y H:i" }}</td><td>{{ l.ip_address|default:"-" }}</td>
+            <td class="muted small">{{ l.user_agent|truncatechars:60 }}</td></tr>
+      {% empty %}<tr><td colspan="3" class="muted">No sign-ins recorded.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

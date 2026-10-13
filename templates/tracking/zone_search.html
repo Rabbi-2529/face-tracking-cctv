@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Zone search{% endblock %}
+{% block content %}
+<h1>Zone search</h1>
+<p class="muted">
+  Who was in a given room during a given window. This asks about a place, not a
+  person, so it needs no tracking request, and it answers most real
+  investigations.
+</p>
+
+<form method="get" class="inline-form card">
+  <label>Zone
+    <select name="zone" required>
+      <option value="">Choose...</option>
+      {% for z in zones %}
+        <option value="{{ z.code }}" {% if selected_zone.code == z.code %}selected{% endif %}>
+          {{ z.name }} ({{ z.floor.name }})
+        </option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>From <input type="datetime-local" name="start" value="{{ request.GET.start }}" required></label>
+  <label>To <input type="datetime-local" name="end" value="{{ request.GET.end }}" required></label>
+  <button type="submit">Search</button>
+</form>
+
+{% if selected_zone %}
+  <h2>{{ result_count }} present in {{ selected_zone.name }}</h2>
+  <p class="muted small">
+    {{ start|date:"j M Y H:i" }} to {{ end|date:"j M Y H:i" }}.
+    Includes anyone whose stay overlapped the window.
+  </p>
+  <table class="grid">
+    <thead><tr><th>Employee</th><th>Entered</th><th>Left</th><th>Duration</th><th>Confidence</th></tr></thead>
+    <tbody>
+      {% for i in results %}
+        <tr>
+          <td><a href="{% url 'tracking:employee_timeline' i.employee.uuid %}">{{ i.employee.full_name }}</a>
+              <span class="muted small">{{ i.employee.employee_code }}</span></td>
+          <td>{{ i.entered_at|date:"H:i:s" }}</td>
+          <td>{% if i.exited_at %}{{ i.exited_at|date:"H:i:s" }}{% else %}<b class="ok">still there</b>{% endif %}</td>
+          <td>{% if i.duration_seconds %}{{ i.duration_seconds }}s{% else %}&mdash;{% endif %}</td>
+          <td class="conf-{{ i.confidence }}">{{ i.get_confidence_display }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">Nobody recorded in this zone during that window.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+{% endif %}
+{% endblock %}

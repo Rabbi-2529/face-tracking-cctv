@@ -1,0 +1,305 @@
+name: cctv-tracking
+
+# ---------------------------------------------------------------------------
+# Phase 1 brings up: db, redis, minio, web, worker, beat, aggregator.
+#   docker compose up -d
+#
+# The vision tier is behind a profile so the stack runs on any machine with no
+# cameras and no GPU:
+#   docker compose --profile vision up -d          # real RTSP (phase 2+)
+#   MOCK_VISION=1 docker compose --profile vision up -d   # synthetic events
+#
+# GPU:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+#     --profile vision up -d
+# ---------------------------------------------------------------------------
+
+x-django-env: &django-env
+  DJANGO_SETTINGS_MODULE: config.settings
+  DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?set DJANGO_SECRET_KEY in .env}
+  DJANGO_DEBUG: ${DJANGO_DEBUG:-0}
+  DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+  DJANGO_CSRF_TRUSTED_ORIGINS: ${DJANGO_CSRF_TRUSTED_ORIGINS:-http://localhost:8000}
+  DATABASE_URL: postgresql://${POSTGRES_USER:-cctv}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-cctv}
+  REDIS_URL: redis://redis:6379/0
+  CELERY_BROKER_URL: redis://redis:6379/1
+  CHANNELS_REDIS_URL: redis://redis:6379/2
+  EVENT_STREAM: ${EVENT_STREAM:-events:detections}
+  # Empty S3_ENDPOINT_URL means snapshots go to the local `media` volume,
+  # still served only through the permission-checked streaming endpoint.
+  S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+  S3_PUBLIC_ENDPOINT_URL: ${S3_PUBLIC_ENDPOINT_URL:-}
+  S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+  S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+  S3_BUCKET: ${S3_BUCKET:-cctv-snapshots}
+  ENVIRONMENT: ${ENVIRONMENT:-production}
+  MFA_ENFORCED: ${MFA_ENFORCED:-0}
+  FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
+  SNAPSHOT_URL_TTL_SECONDS: ${SNAPSHOT_URL_TTL_SECONDS:-180}
+  MODEL_DIR: /models
+  # Enrolment runs on CPU in the web tier; only the camera workers need a GPU.
+  EXEC_PROVIDER: CPUExecutionProvider
+  TZ: ${TZ:-Asia/Kolkata}
+
+x-django-base: &django-base
+  build:
+    context: .
+    dockerfile: docker/web/Dockerfile
+    args:
+      REQUIREMENTS: ${WEB_REQUIREMENTS:-base.txt}
+  image: cctv-tracking/web:latest
+  volumes:
+    - ./:/app
+    - staticfiles:/app/staticfiles
+    - media:/app/media
+    # Read-only: HR enrolment runs the same detector and embedder as the
+    # camera workers, so the web and worker tiers need the weights. They
+    # never write them.
+    - models:/models:ro
+    # Mounted at the same path the vision workers use, so a camera's stored
+    # address means the same thing in both tiers. Without this, the
+    # test-connection button cannot open a video-file camera that a worker
+    # can read perfectly well.
+    - ./samples:/samples:ro
+  restart: unless-stopped
+  logging: &logging
+    driver: json-file
+    options:
+      max-size: "20m"
+      max-file: "5"
+
+services:
+  # ================================================================== data
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-cctv}
+      POSTGRES_USER: ${POSTGRES_USER:-cctv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    command:
+      - postgres
+      - -c
+      - shared_buffers=${PG_SHARED_BUFFERS:-1GB}
+      - -c
+      - work_mem=64MB
+      - -c
+      - maintenance_work_mem=512MB
+      - -c
+      - max_connections=200
+      # Detections are reconstructible from the event stream; favour write
+      # throughput over durability for the hot path.
+      - -c
+      - synchronous_commit=off
+      - -c
+      - wal_compression=on
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cctv} -d ${POSTGRES_DB:-cctv}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${REDIS_MAXMEMORY:-1gb}
+      # Never silently evict queued detection events.
+      - --maxmemory-policy
+      - noeviction
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+
+  # Object storage is OPT-IN. Snapshots default to a local volume, served
+  # only through the permission-checked streaming view in
+  # apps/tracking/views.py - never from a public path.
+  #
+  # For production, point S3_* at your own bucket (AWS S3, Wasabi, Backblaze
+  # B2, or a self-hosted MinIO you pull with your own credentials: MinIO's
+  # images are now gated behind a registry login).
+  #
+  #   docker compose --profile s3 up -d minio
+  minio:
+    profiles: ["s3"]
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-cctvadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
+    volumes:
+      - miniodata:/data
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+    logging: *logging
+
+  minio-init:
+    profiles: ["s3"]
+    image: ${MINIO_MC_IMAGE:-minio/mc:latest}
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        mc alias set local http://minio:9000 "${MINIO_ROOT_USER:-cctvadmin}" "${MINIO_ROOT_PASSWORD}"
+        mc mb --ignore-existing "local/${S3_BUCKET:-cctv-snapshots}"
+        mc anonymous set none "local/${S3_BUCKET:-cctv-snapshots}"
+        echo "bucket ${S3_BUCKET:-cctv-snapshots} ready (private, no anonymous access)"
+    restart: "no"
+    logging: *logging
+
+  # ============================================================== app tier
+  # One-shot bootstrap: migrations, static, role seeding. Everything waits on it.
+  migrate:
+    <<: *django-base
+    environment:
+      <<: *django-env
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+    command: ["bash", "/app/docker/web/entrypoint.sh", "migrate"]
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    <<: *django-base
+    environment:
+      <<: *django-env
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-4}
+    command: ["bash", "/app/docker/web/entrypoint.sh", "web"]
+    ports:
+      - "${WEB_PORT:-8000}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz/"]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 45s
+
+  # The realtime consumer. Redis Stream -> Detection -> PresenceInterval ->
+  # MovementEvent -> WebSocket broadcast. This is what makes the board live.
+  aggregator:
+    <<: *django-base
+    environment:
+      <<: *django-env
+      AGGREGATOR_CONSUMER: ${AGGREGATOR_CONSUMER:-aggregator-1}
+      AGGREGATOR_BATCH_SIZE: ${AGGREGATOR_BATCH_SIZE:-200}
+      AGGREGATOR_BLOCK_MS: ${AGGREGATOR_BLOCK_MS:-1000}
+    command: ["bash", "/app/docker/web/entrypoint.sh", "aggregator"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    stop_grace_period: 30s
+
+  worker:
+    <<: *django-base
+    environment: *django-env
+    command: ["bash", "/app/docker/web/entrypoint.sh", "worker"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  beat:
+    <<: *django-base
+    environment: *django-env
+    command: ["bash", "/app/docker/web/entrypoint.sh", "beat"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  # =========================================================== vision tier
+  # Profile-gated: not started by a plain `docker compose up`.
+  vision:
+    profiles: ["vision"]
+    build:
+      context: .
+      dockerfile: docker/vision/Dockerfile
+      args:
+        BASE_IMAGE: ${VISION_BASE_IMAGE:-python:3.12-slim-bookworm}
+        ONNX_PACKAGE: ${VISION_ONNX_PACKAGE:-onnxruntime==1.21.0}
+    image: cctv-tracking/vision:${VISION_IMAGE_TAG:-cpu}
+    environment:
+      # Read-only DB user: cameras + face gallery, nothing else.
+      DATABASE_URL: postgresql://${VISION_DB_USER:-cctv}:${VISION_DB_PASSWORD:-${POSTGRES_PASSWORD}}@db:5432/${POSTGRES_DB:-cctv}
+      REDIS_URL: redis://redis:6379/0
+      EVENT_STREAM: ${EVENT_STREAM:-events:detections}
+      EVENT_STREAM_MAXLEN: ${EVENT_STREAM_MAXLEN:-200000}
+      S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
+      S3_BUCKET: ${S3_BUCKET:-cctv-snapshots}
+      # Vision workers decrypt camera credentials with the same key the web
+      # tier encrypts them with.
+      FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
+      MODEL_DIR: /models
+      EXEC_PROVIDER: ${EXEC_PROVIDER:-CPUExecutionProvider}
+      SAMPLE_FPS: ${SAMPLE_FPS:-4}
+      MATCH_THRESHOLD_HIGH: ${MATCH_THRESHOLD_HIGH:-0.45}
+      MATCH_THRESHOLD_LOW: ${MATCH_THRESHOLD_LOW:-0.30}
+      VOTE_WINDOW: ${VOTE_WINDOW:-12}
+      MIN_FACE_PX: ${MIN_FACE_PX:-60}
+      GALLERY_REFRESH_SECONDS: ${GALLERY_REFRESH_SECONDS:-30}
+      # Horizontal sharding: run N replicas; each claims the cameras where
+      # (camera.id %% SHARD_COUNT) == SHARD_INDEX.
+      SHARD_INDEX: ${SHARD_INDEX:-0}
+      SHARD_COUNT: ${SHARD_COUNT:-1}
+      # 1 = synthesise plausible movement with no cameras and no models.
+      MOCK_VISION: ${MOCK_VISION:-0}
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ./vision:/app/vision:ro
+      - ./scripts:/app/scripts:ro
+      - models:/models
+      - ./samples:/samples:ro
+      # Shared with the web tier so snapshots written here are readable by
+      # the streaming endpoint when S3 is not configured.
+      - media:/app/media
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    command: ["python", "-m", "vision.supervisor"]
+    shm_size: ${VISION_SHM_SIZE:-1gb}
+    restart: unless-stopped
+    stop_grace_period: 20s
+    logging: *logging
+
+volumes:
+  pgdata:
+  miniodata:
+  staticfiles:
+  media:
+  models:

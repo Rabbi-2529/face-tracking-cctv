@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}{% if rule %}Edit{% else %}New{% endif %} alert rule{% endblock %}
+{% block content %}
+<h1>{% if rule %}Edit{% else %}New{% endif %} alert rule</h1>
+<p class="muted">Only the fields for the chosen type matter: authorised people for
+   restricted zones, the time window for after hours.</p>
+{{ form.non_field_errors }}
+<form method="post" class="card stacked">
+  {% csrf_token %}
+  {% for f in form %}
+    {% if f.name == "is_enabled" or f.name == "weekends_count" %}
+      <label class="check">{{ f }} {{ f.label }}</label>
+    {% elif f.name == "authorised_departments" or f.name == "applies_to_departments" %}
+      <label>{{ f.label }}<div class="checkbox-list">{{ f }}</div>
+        {% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% else %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit">Save rule</button>
+    <a href="{% url 'alerts:rules' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1>Dashboard</h1>
+<p class="muted">{{ role_label }} &middot; {{ now|date:"l j F Y, H:i" }}</p>
+
+<div class="tiles">
+  {% if people_present is not None %}
+    <div class="tile"><span class="n">{{ people_present|default:"0" }}</span>
+      <span class="l">people on site</span></div>
+  {% endif %}
+  {% if zone_count %}
+    <div class="tile"><span class="n">{{ zone_count }}</span>
+      <span class="l">zones visible to you</span></div>
+  {% endif %}
+  {% if camera_total %}
+    <div class="tile {% if camera_offline %}bad-tile{% endif %}">
+      <span class="n">{{ camera_offline }}/{{ camera_total }}</span>
+      <span class="l">cameras offline</span></div>
+  {% endif %}
+  {% if camera_not_identity_capable %}
+    <div class="tile warn-tile"><span class="n">{{ camera_not_identity_capable }}</span>
+      <span class="l">identity cameras below 60px, cannot name faces</span></div>
+  {% endif %}
+  {% if employee_count %}
+    <div class="tile"><span class="n">{{ employee_count }}</span>
+      <span class="l">employees in your scope</span></div>
+  {% endif %}
+  {% if employees_not_processable %}
+    <div class="tile warn-tile"><span class="n">{{ employees_not_processable }}</span>
+      <span class="l">not matchable: consent or enrolment missing</span></div>
+  {% endif %}
+  {% if pending_requests %}
+    <div class="tile warn-tile"><span class="n">{{ pending_requests }}</span>
+      <span class="l">tracking requests awaiting your decision</span></div>
+  {% endif %}
+  {% if my_active_requests %}
+    <div class="tile"><span class="n">{{ my_active_requests }}</span>
+      <span class="l">approvals active for me</span></div>
+  {% endif %}
+  {% if open_alerts %}
+    <a class="tile bad-tile" href="{% url 'alerts:inbox' %}"><span class="n">{{ open_alerts }}</span>
+      <span class="l">open alerts in your zones</span></a>
+  {% endif %}
+  {% if pending_elevations %}
+    <a class="tile warn-tile" href="{% url 'useradmin:list' %}"><span class="n">{{ pending_elevations }}</span>
+      <span class="l">break-glass requests awaiting a decision</span></a>
+  {% endif %}
+  {% if implausible_pending %}
+    <div class="tile warn-tile"><span class="n">{{ implausible_pending }}</span>
+      <span class="l">implausible movements to review</span></div>
+  {% endif %}
+</div>
+
+<section class="card">
+  <h2>What you can do</h2>
+  <ul class="actions">
+    {% if 'live.view_all' in granted_actions or 'live.view_assigned' in granted_actions %}
+      <li><a href="{% url 'tracking:live_board' %}">Live occupancy board</a>
+          &mdash; who is in which room now</li>
+    {% endif %}
+    {% if 'history.any' in granted_actions or 'history.department' in granted_actions %}
+      <li><a href="{% url 'tracking:zone_search' %}">Zone search</a>
+          &mdash; who was in a room during a time window.
+          <span class="muted">No approval needed; preferred for investigations.</span></li>
+    {% endif %}
+    {% if 'employee.view' in granted_actions %}
+      <li><a href="{% url 'tracking:employee_list' %}">Employee directory</a></li>
+    {% endif %}
+    {% if 'trackrequest.create' in granted_actions %}
+      <li><a href="{% url 'watchlist:create' %}">Raise a tracking request</a>
+          &mdash; required to follow a named person outside your scope</li>
+    {% endif %}
+    {% if 'trackrequest.approve' in granted_actions %}
+      <li><a href="{% url 'watchlist:list' %}">Approve tracking requests</a></li>
+    {% endif %}
+    {% if 'history.any' in granted_actions %}
+      <li><a href="{% url 'tracking:movement_review' %}">Review queues</a>
+          &mdash; implausible movements, correction reports, unknown faces</li>
+    {% endif %}
+    {% if 'report.aggregate_view' in granted_actions %}
+      <li><a href="{% url 'tracking:reports' %}">Reports</a>
+          &mdash; headcount and space use</li>
+    {% endif %}
+    <li><a href="{% url 'accounts:my_account' %}">My own record and sign-in history</a></li>
+  </ul>
+</section>
+{% endblock %}

@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+{% with r=report %}
+<h1>Reports</h1>
+<p class="muted">
+  Headcount and space use from the nightly daily summaries, so today is never
+  included. These are not productivity measures: there is no time-at-desk or
+  per-person ranking here, by design.
+</p>
+
+<form method="get" class="inline-form">
+  <label>From <input type="date" name="start" value="{{ r.start|date:'Y-m-d' }}"></label>
+  <label>To <input type="date" name="end" value="{{ r.end|date:'Y-m-d' }}"></label>
+  <label>Department
+    <select name="department">
+      <option value="">All in your scope</option>
+      {% for d in departments %}
+        <option value="{{ d.pk }}" {% if department_id == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Show</button>
+</form>
+
+{% if r.suppressed %}
+  <div class="banner warn small">
+    Counts below 3 are shown as "&lt;3", and their hours withheld, because a
+    count that small identifies the people in it.
+  </div>
+{% endif %}
+{% if r.days_with_data < r.day_count %}
+  <div class="banner small">
+    {{ r.days_with_data }} of {{ r.day_count }} days have summaries. Summaries are
+    built each night for the previous day; days before the system ran, or with
+    nobody seen, have none.
+  </div>
+{% endif %}
+
+<div class="tiles">
+  <div class="tile"><span class="n">{{ r.person_days }}</span><span class="l">person-days in range</span></div>
+  <div class="tile"><span class="n">{{ r.restricted_entries }}</span><span class="l">restricted-area entries</span></div>
+  {% if r.low_confidence_ratio is not None %}
+    <div class="tile {% if r.low_confidence_ratio > 0.3 %}warn-tile{% endif %}">
+      <span class="n">{% widthratio r.low_confidence_ratio 1 100 %}%</span>
+      <span class="l">of entries rest on a probable match</span></div>
+  {% endif %}
+</div>
+
+<section class="card">
+  <div class="page-head">
+    <h2>Daily headcount</h2>
+    {% if can_export_aggregate %}<a href="{% url 'tracking:report_export' 'headcount' %}?{{ query }}">Export CSV</a>{% endif %}
+  </div>
+  <table class="grid">
+    <thead><tr><th>Date</th>{% for name in r.dept_names %}<th>{{ name }}</th>{% endfor %}<th>Total</th></tr></thead>
+    <tbody>
+      {% for row in r.headcount_rows %}
+        <tr><td class="small">{{ row.date|date:"D j M" }}</td>
+          {% for c in row.cells %}<td>{{ c }}</td>{% endfor %}
+          <td><b>{{ row.total }}</b></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <div class="page-head">
+    <h2>Space use by zone</h2>
+    {% if can_export_aggregate %}<a href="{% url 'tracking:report_export' 'zones' %}?{{ query }}">Export CSV</a>{% endif %}
+  </div>
+  <table class="grid">
+    <thead><tr><th>Zone</th><th>Distinct people</th><th>Person-hours</th></tr></thead>
+    <tbody>
+      {% for z in r.zone_rows %}
+        <tr><td>{{ z.zone.name }}<div class="muted small">{{ z.zone.code }}</div></td>
+            <td>{{ z.people }}</td>
+            <td>{% if z.hours is None %}<span class="muted">withheld</span>{% else %}{{ z.hours }}{% endif %}</td></tr>
+      {% empty %}
+        <tr><td colspan="3" class="muted">No presence recorded in this range.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if can_export_identity %}
+<section class="card">
+  <h2>Per-person export</h2>
+  <p class="muted small">
+    One row per person per day. This is identity data: the export is
+    recorded in the audit log with your name, and is limited to
+    administrators.
+  </p>
+  <a class="button" href="{% url 'tracking:report_export' 'people' %}?{{ query }}">Export per-person CSV</a>
+</section>
+{% endif %}
+{% endwith %}
+{% endblock %}

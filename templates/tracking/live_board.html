@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Live board{% endblock %}
+{% block content %}
+<h1>Live occupancy</h1>
+<p class="muted">
+  <span id="ws-state">connecting...</span> &middot;
+  <b id="total">{{ total_present }}</b> people currently on site
+</p>
+
+{% for entry in floors %}
+<section class="card floor-block">
+  <h2>{{ entry.floor.building.name }} / {{ entry.floor.name }}</h2>
+
+  {% if entry.drawing and entry.drawing.shapes %}
+    {% with d=entry.drawing %}
+    <svg class="plan live-plan" viewBox="0 0 {{ d.width }} {{ d.height }}"
+         preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="Floor plan of {{ entry.floor.name }} with room occupancy">
+      <image href="{{ d.image_url }}" x="0" y="0" width="{{ d.width }}" height="{{ d.height }}"></image>
+      {% for s in d.shapes %}
+        <g data-zone="{{ s.id }}" class="plan-room{% if s.zone.is_restricted %} restricted{% endif %}{% if s.zone.occupancy %} occupied{% endif %}">
+          <polygon points="{{ s.points }}"><title>{{ s.name }}</title></polygon>
+          <text x="{{ s.cx }}" y="{{ s.cy }}" font-size="{{ d.font_size }}" class="plan-label">{{ s.name }}</text>
+          <text x="{{ s.cx }}" y="{{ s.cy }}" dy="1.2em" font-size="{{ d.font_size }}"
+                class="plan-count" data-count>{{ s.zone.occupancy }}</text>
+        </g>
+      {% endfor %}
+    </svg>
+    {% endwith %}
+  {% endif %}
+
+  <div class="zone-grid">
+    {% for zone in entry.zones %}
+      <div class="zone {% if zone.is_restricted %}restricted{% endif %}" data-zone="{{ zone.id }}">
+        <div class="zone-name">{{ zone.name }}</div>
+        <div class="zone-meta muted small">{{ zone.get_zone_type_display }}</div>
+        <div class="zone-count" data-count>{{ zone.occupancy }}</div>
+        <div class="zone-alert small" data-alert></div>
+      </div>
+    {% endfor %}
+  </div>
+</section>
+{% empty %}
+  <p class="muted">No zones are in your scope. Ask an administrator to set your
+     zone scope.</p>
+{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var state = document.getElementById('ws-state');
+  var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  var socket = new WebSocket(proto + '://' + location.host + '/ws/live/');
+
+  socket.onopen = function () { state.textContent = 'live'; };
+  socket.onclose = function (e) {
+    // 4403 means authenticated but scoped to nothing. Say so, rather than
+    // letting the page look merely broken.
+    state.textContent = e.code === 4403
+      ? 'no zones in your scope'
+      : 'disconnected, reload to reconnect';
+  };
+
+  socket.onmessage = function (event) {
+    var msg = JSON.parse(event.data);
+    if (msg.type === 'occupancy') {
+      // A zone appears twice when its floor has a plan: on the drawing and
+      // in the grid. Update both.
+      document.querySelectorAll('[data-zone="' + msg.zone_id + '"]').forEach(function (node) {
+        var count = node.querySelector('[data-count]');
+        if (count) { count.textContent = msg.occupancy; }
+        if (node.classList.contains('plan-room')) {
+          node.classList.toggle('occupied', msg.occupancy > 0);
+        }
+      });
+      recount();
+    } else if (msg.type === 'camera_status') {
+      var box = document.querySelector('.zone[data-zone="' + msg.zone_id + '"] [data-alert]');
+      if (box) {
+        box.textContent = msg.status === 'online'
+          ? ''
+          : 'camera ' + msg.camera_code + ' ' + msg.status + ' - coverage gap';
+        box.className = 'zone-alert small ' + (msg.status === 'online' ? '' : 'bad');
+      }
+      var room = document.querySelector('.plan-room[data-zone="' + msg.zone_id + '"]');
+      if (room) { room.classList.toggle('gap', msg.status !== 'online'); }
+    }
+  };
+
+  function recount() {
+    var total = 0;
+    document.querySelectorAll('.zone [data-count]').forEach(function (n) {
+      total += parseInt(n.textContent, 10) || 0;
+    });
+    document.getElementById('total').textContent = total;
+  }
+})();
+</script>
+{% endblock %}

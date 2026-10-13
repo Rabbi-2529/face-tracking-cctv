@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}New tracking request{% endblock %}
+{% block content %}
+<h1>Request authorisation to track an individual</h1>
+
+<div class="banner warn">
+  This is a request to monitor a specific person. It is recorded permanently,
+  reviewed by an administrator, visible to auditors, and unless notice is
+  formally suppressed, visible to the subject. Give a reason you are prepared
+  to stand behind.
+</div>
+
+<form method="post" class="card stacked">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for field in form %}
+    <label>
+      {{ field.label }}{% if field.field.required %} <span class="req">*</span>{% endif %}
+      {{ field }}
+      {% if field.help_text %}<span class="muted small">{{ field.help_text }}</span>{% endif %}
+      {{ field.errors }}
+    </label>
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit">Submit for approval</button>
+    <a href="{% url 'watchlist:list' %}">Cancel</a>
+  </div>
+</form>
+
+<p class="muted small">
+  Looking for who was in a particular room? Use
+  <a href="{% url 'tracking:zone_search' %}">zone search</a> instead. It needs no
+  approval and answers most questions.
+</p>
+{% endblock %}

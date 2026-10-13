@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Backup codes{% endblock %}
+{% block content %}
+<div class="centered card">
+  {% if just_enrolled %}
+    <div class="banner ok">Authenticator enrolled, and this session is verified.</div>
+  {% endif %}
+  <h1>Your backup codes</h1>
+  <p>Each code works <b>once</b>, in place of an authenticator code, if you lose
+     your phone. Store them somewhere safe and offline. <b>This is the only time
+     they are shown</b>; any earlier set no longer works.</p>
+  <ul class="backup-codes">
+    {% for code in codes %}<li><code>{{ code }}</code></li>{% endfor %}
+  </ul>
+  <p><a class="button" href="{% url 'tracking:dashboard' %}">I've saved them - continue</a></p>
+</div>
+{% endblock %}

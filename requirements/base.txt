@@ -1,0 +1,42 @@
+# Core runtime, shared by web / worker / beat / aggregator.
+# Ranges are intentional: freeze to exact pins with `pip-compile` once the
+# stack is stable (see Makefile target `lock`).
+
+Django>=5.2,<5.3
+djangorestframework>=3.16,<3.17
+django-filter>=25.1,<26
+drf-spectacular>=0.28,<0.29
+
+# Postgres + vector search
+psycopg[binary,pool]>=3.2,<3.3
+pgvector>=0.4,<0.5
+
+# Async / realtime
+channels[daphne]>=4.2,<4.3
+channels-redis>=4.2,<4.3
+uvicorn[standard]>=0.34,<0.35
+
+# Background tasks
+celery[redis]>=5.5,<5.6
+django-celery-beat>=2.8,<2.9
+redis>=5.2,<6
+
+# Face recognition inference. The web and worker tiers need these so HR
+# enrolment can give immediate, specific feedback on an uploaded photo
+# instead of queueing it. The `vision` package itself stays Django-free.
+numpy>=1.26,<2.3
+opencv-python-headless>=4.11,<5
+onnxruntime>=1.21,<2        # CPU; the vision image installs onnxruntime-gpu
+
+# Config / storage / static
+Pillow>=11.1,<12          # ImageField validation for enrolments and floor plans
+django-environ>=0.12,<0.13
+django-storages[boto3]>=1.14,<1.15
+whitenoise>=6.9,<7
+
+# Security
+cryptography>=44,<46          # backs apps/common/fields.EncryptedTextField
+argon2-cffi>=23.1,<26         # stronger password hashing than PBKDF2
+django-axes>=7.0,<8           # login throttling / lockout
+django-otp>=1.6,<2            # TOTP MFA for Developer / Admin / HR
+qrcode>=8.0,<9                # MFA enrolment QR

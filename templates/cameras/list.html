@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}Cameras{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Cameras</h1>
+  {% if can_manage %}
+    <a class="button" href="{% url 'cameras:create' %}">Add camera</a>
+  {% endif %}
+</div>
+
+<div class="tiles">
+  <div class="tile"><span class="n">{{ counts.total }}</span><span class="l">cameras</span></div>
+  <div class="tile"><span class="n">{{ counts.online }}</span><span class="l">online</span></div>
+  {% if counts.degraded %}
+    <div class="tile warn-tile"><span class="n">{{ counts.degraded }}</span><span class="l">degraded</span></div>
+  {% endif %}
+  {% if counts.offline %}
+    <div class="tile bad-tile"><span class="n">{{ counts.offline }}</span>
+      <span class="l">offline &mdash; coverage gaps</span></div>
+  {% endif %}
+  {% if counts.disabled %}
+    <div class="tile"><span class="n">{{ counts.disabled }}</span><span class="l">disabled</span></div>
+  {% endif %}
+  {% if counts.below_spec %}
+    <div class="tile bad-tile"><span class="n">{{ counts.below_spec }}</span>
+      <span class="l">identity cameras that cannot name a face</span></div>
+  {% endif %}
+  {% if counts.unaudited %}
+    <div class="tile warn-tile"><span class="n">{{ counts.unaudited }}</span>
+      <span class="l">identity cameras never audited</span></div>
+  {% endif %}
+</div>
+
+{% if counts.below_spec or counts.unaudited %}
+<div class="banner warn">
+  <b>Face capability is the main thing that limits this system.</b>
+  A camera marked for identity work needs faces at least 60px wide, ideally
+  100px+. Use <b>Test connection</b> on a camera, or run the full audit:
+  <code>make audit secs=120</code>
+</div>
+{% endif %}
+
+<form method="get" class="inline-form">
+  <input name="q" value="{{ request.GET.q }}" placeholder="Name, code or zone">
+  <label>Status
+    <select name="status" onchange="this.form.submit()">
+      <option value="">Any</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <label>Purpose
+    <select name="purpose" onchange="this.form.submit()">
+      <option value="">Any</option>
+      {% for value, label in purposes %}
+        <option value="{{ value }}" {% if request.GET.purpose == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <button type="submit">Filter</button>
+</form>
+
+<table class="grid">
+  <thead><tr><th>Camera</th><th>Zone</th><th>Purpose</th><th>Face capability</th>
+             <th>Status</th><th>Recent</th><th></th></tr></thead>
+  <tbody>
+    {% for c in cameras %}
+      <tr {% if not c.is_enabled %}class="muted"{% elif c.status == 'offline' %}class="row-bad"{% endif %}>
+        <td>
+          <a href="{% url 'cameras:detail' c.code %}">{{ c.name }}</a>
+          <div class="muted small"><code>{{ c.code }}</code> &middot; {{ c.get_vendor_display }}</div>
+        </td>
+        <td>{{ c.zone.name }}<div class="muted small">{{ c.zone.floor.name }}</div></td>
+        <td>
+          {{ c.get_purpose_display|truncatewords:2 }}
+          {% if c.purpose == 'identity' and not c.is_identity_capable %}
+            <div class="bad small">cannot name faces</div>
+          {% endif %}
+        </td>
+        <td>
+          {% if c.measured_face_width_px %}
+            {% if c.measured_face_width_px >= 100 %}
+              <span class="ok">{{ c.measured_face_width_px }}px good</span>
+            {% elif c.measured_face_width_px >= 60 %}
+              <span class="warnc">{{ c.measured_face_width_px }}px marginal</span>
+            {% else %}
+              <span class="bad">{{ c.measured_face_width_px }}px too small</span>
+            {% endif %}
+          {% else %}
+            <span class="muted">not audited</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if not c.is_enabled %}<span class="muted">disabled</span>
+          {% elif c.status == 'online' %}<span class="ok">online</span>
+          {% elif c.status == 'degraded' %}<span class="warnc">degraded</span>
+          {% elif c.status == 'offline' %}<span class="bad">offline</span>
+          {% else %}<span class="muted">unknown</span>{% endif %}
+        </td>
+        <td class="small">
+          {% if c.recent %}
+            {{ c.recent.fps|floatformat:1 }} fps<br>
+            {{ c.recent.seen|default:"0" }} faces
+            {% if c.gate_rate %}<br>{{ c.gate_rate|floatformat:2 }} gated{% endif %}
+          {% else %}<span class="muted">no data</span>{% endif %}
+        </td>
+        <td class="small">
+          <a href="{% url 'cameras:detail' c.code %}">Open</a>
+          {% if can_manage %}
+            &middot; <a href="{% url 'cameras:edit' c.code %}">Edit</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">
+        No cameras{% if request.GET.q %} match that search{% endif %}.
+        {% if can_manage %}<a href="{% url 'cameras:create' %}">Add one</a>.{% endif %}
+      </td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}Live follow - {{ employee.full_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Live follow: {{ employee.full_name }}</h1>
+    <p class="muted">{{ employee.employee_code }} &middot; {{ employee.department.name|default:"no department" }}</p>
+  </div>
+  <div class="head-actions">
+    <span class="status-chip" id="ws-state">connecting...</span>
+  </div>
+</div>
+
+<div class="banner warn small">
+  This session is recorded: when you opened it, for how long, and from where.
+  Authorisation: {{ tr.get_purpose_display|lower }}, approved by
+  {{ tr.approved_by.email }}. It ends at <b>{{ tr.end_at|date:"j M H:i" }}</b>
+  (<span id="remaining" data-seconds="{{ tr.seconds_remaining }}"></span> left), or
+  sooner if revoked - the page closes the moment it does.
+</div>
+
+<div class="tiles">
+  <div class="tile">
+    <span class="l">Last seen in</span>
+    <span class="n" id="current-zone">{{ current.zone.name|default:"not seen" }}</span>
+    <span class="l" id="current-at">{% if current %}{% if current.exited_at %}left at {{ current.exited_at|date:"H:i:s" }}{% else %}present since {{ current.entered_at|date:"H:i:s" }}{% endif %}{% endif %}</span>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Movements since this authorisation began</h2>
+  <table class="grid">
+    <thead><tr><th>Time</th><th>From</th><th>To</th><th>Confidence</th><th>Plausible</th></tr></thead>
+    <tbody id="moves">
+      {% for m in movements %}
+        <tr {% if not m.is_plausible %}class="row-bad"{% endif %}>
+          <td class="small">{{ m.occurred_at|date:"H:i:s" }}</td>
+          <td>{{ m.from_zone.name|default:"arrival" }}</td>
+          <td>{{ m.to_zone.name }}</td>
+          <td class="small conf-{{ m.confidence }}">{{ m.get_confidence_display }}</td>
+          <td>{% if m.is_plausible %}yes{% else %}<b class="bad">no</b>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr class="empty"><td colspan="5" class="muted">No movements since the approval.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="small muted">Live entries show zone codes as they arrive. A probable match is a lead, not a fact.</p>
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var state = document.getElementById('ws-state');
+  var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  var socket = new WebSocket(proto + '://' + location.host + '/ws/track/{{ tr.uuid }}/');
+  var ended = false;
+
+  function end(text) {
+    ended = true;
+    state.textContent = text;
+    state.className = 'status-chip bad';
+  }
+
+  socket.onopen = function () { state.textContent = 'live'; };
+  socket.onclose = function (e) {
+    if (ended) { return; }
+    end(e.code === 4403 ? 'authorisation ended' : 'disconnected - reload to reconnect');
+  };
+
+  // The ping is also when the server re-checks the authorisation.
+  var pinger = setInterval(function () {
+    if (socket.readyState === WebSocket.OPEN) { socket.send(JSON.stringify({type: 'ping'})); }
+  }, 20000);
+
+  socket.onmessage = function (event) {
+    var msg = JSON.parse(event.data);
+    if (msg.type === 'authorisation_ended') {
+      clearInterval(pinger);
+      end('authorisation ended');
+    } else if (msg.type === 'movement') {
+      var at = new Date(msg.occurred_at);
+      document.getElementById('current-zone').textContent = msg.to_zone;
+      document.getElementById('current-at').textContent = 'arrived ' + at.toLocaleTimeString();
+      var body = document.getElementById('moves');
+      var empty = body.querySelector('.empty');
+      if (empty) { empty.remove(); }
+      var row = document.createElement('tr');
+      if (!msg.is_plausible) { row.className = 'row-bad'; }
+      [at.toLocaleTimeString(), msg.from_zone || 'arrival', msg.to_zone,
+       msg.confidence, msg.is_plausible ? 'yes' : 'no'].forEach(function (text, i) {
+        var cell = document.createElement('td');
+        cell.textContent = text;
+        if (i === 0) { cell.className = 'small'; }
+        if (i === 3) { cell.className = 'small conf-' + msg.confidence; }
+        row.appendChild(cell);
+      });
+      body.insertBefore(row, body.firstChild);
+    }
+  };
+
+  var remaining = document.getElementById('remaining');
+  var seconds = parseInt(remaining.dataset.seconds, 10) || 0;
+  (function tick() {
+    var h = Math.floor(seconds / 3600), m = Math.floor(seconds % 3600 / 60);
+    remaining.textContent = h + 'h ' + m + 'm';
+    if (seconds <= 0) { end('authorisation expired'); socket.close(); return; }
+    seconds -= 30;
+    setTimeout(tick, 30000);
+  })();
+})();
+</script>
+{% endblock %}

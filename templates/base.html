@@ -1,0 +1,94 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CCTV Tracking{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+</head>
+<body>
+{% if user.is_authenticated %}
+<header class="topbar">
+  <a class="brand" href="{% url 'tracking:dashboard' %}">CCTV Tracking</a>
+  <nav>
+    {% if 'live.view_all' in granted_actions or 'live.view_assigned' in granted_actions %}
+      <a href="{% url 'tracking:live_board' %}">Live</a>
+    {% endif %}
+    {% if 'history.any' in granted_actions or 'history.department' in granted_actions %}
+      <a href="{% url 'tracking:zone_search' %}">Zone search</a>
+    {% endif %}
+    {% if 'employee.view' in granted_actions %}
+      <a href="{% url 'tracking:employee_list' %}">Employees</a>
+    {% endif %}
+    {% if 'camera.view' in granted_actions %}
+      <a href="{% url 'cameras:list' %}">Cameras</a>
+    {% endif %}
+    {% if 'trackrequest.create' in granted_actions or 'trackrequest.approve' in granted_actions %}
+      <a href="{% url 'watchlist:list' %}">Requests</a>
+    {% endif %}
+    {% if 'history.any' in granted_actions %}
+      <a href="{% url 'tracking:movement_review' %}">Review</a>
+    {% endif %}
+    {% if 'alert.ack' in granted_actions %}
+      <a href="{% url 'alerts:inbox' %}">Alerts</a>
+    {% elif 'alertrule.manage' in granted_actions %}
+      <a href="{% url 'alerts:rules' %}">Alert rules</a>
+    {% endif %}
+    {% if 'report.aggregate_view' in granted_actions %}
+      <a href="{% url 'tracking:reports' %}">Reports</a>
+    {% endif %}
+    {% if 'zone.manage' in granted_actions %}
+      <a href="{% url 'org:overview' %}">Site</a>
+    {% endif %}
+    {% if 'user.manage' in granted_actions %}
+      <a href="{% url 'useradmin:list' %}">Users</a>
+    {% endif %}
+    {% if 'pipeline.view' in granted_actions %}
+      <a href="{% url 'cameras:pipeline' %}">Matching</a>
+    {% endif %}
+    {% if 'audit.read_all' in granted_actions or 'audit.read_own' in granted_actions %}
+      <a href="{% url 'tracking:audit_log' %}">Audit</a>
+    {% endif %}
+  </nav>
+  <div class="user">
+    <span class="role-chip">{{ role_label }}</span>
+    <a href="{% url 'accounts:my_account' %}">{{ user.email }}</a>
+    <form method="post" action="{% url 'accounts:logout' %}" class="inline">
+      {% csrf_token %}<button type="submit" class="linkish">Sign out</button>
+    </form>
+  </div>
+</header>
+{% endif %}
+
+<main>
+  {% if needs_mfa_enrolment %}
+    <div class="banner warn">
+      Your role requires an authenticator app. Gated features stay unavailable
+      until you <a href="{% url 'accounts:mfa_setup' %}">enrol one</a>.
+    </div>
+  {% endif %}
+  {% if needs_mfa_verification %}
+    <div class="banner warn">
+      This session is not verified yet. <a href="{% url 'accounts:mfa_verify' %}?next={{ request.path|urlencode }}">Enter your authenticator code</a>
+      to use gated features.
+    </div>
+  {% endif %}
+  {% if user.must_change_password %}
+    <div class="banner warn">
+      You are using a temporary password.
+      <a href="{% url 'accounts:password_change' %}">Change it now</a>.
+    </div>
+  {% endif %}
+  {% for message in messages %}
+    <div class="banner {{ message.tags }}">{{ message }}</div>
+  {% endfor %}
+  {% block content %}{% endblock %}
+</main>
+
+<footer class="footnote">
+  Movement records are produced by automated face recognition and can be wrong.
+  They are a lead, never sole evidence. Every view of this data is logged.
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>

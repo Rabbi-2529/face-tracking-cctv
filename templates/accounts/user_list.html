@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Users and access{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Users and access</h1>
+  <a class="button" href="{% url 'useradmin:create' %}">Add user</a>
+</div>
+
+{% if elevations %}
+<div class="banner warn">
+  <b>{{ elevations|length }} break-glass request(s) awaiting your decision.</b>
+  These grant a Developer temporary access to real identities in production.
+  <table class="grid">
+    <thead><tr><th>User</th><th>Actions</th><th>Reason</th><th></th></tr></thead>
+    <tbody>
+      {% for e in elevations %}
+        <tr>
+          <td>{{ e.user.email }}</td>
+          <td class="small">{% for a in e.actions %}<code>{{ a }}</code> {% endfor %}</td>
+          <td class="small">{{ e.reason }}</td>
+          <td>
+            <form method="post" action="{% url 'useradmin:elevation_decide' e.uuid %}" class="decide">
+              {% csrf_token %}
+              <input type="number" name="hours" value="1" min="1" max="4" style="width:4rem">
+              <button name="decision" value="approve" class="ok-btn">Grant</button>
+              <button name="decision" value="reject" class="bad-btn">Reject</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<form method="get" class="inline-form">
+  <input name="q" value="{{ request.GET.q }}" placeholder="Email or name">
+  <button type="submit">Search</button>
+</form>
+
+<table class="grid">
+  <thead><tr><th>Account</th><th>Role</th><th>Scope</th><th>MFA</th>
+             <th>Linked person</th><th>Last sign-in</th><th></th></tr></thead>
+  <tbody>
+    {% for u in users %}
+      <tr {% if not u.is_active %}class="muted"{% endif %}>
+        <td>{{ u.email }}<div class="muted small">{{ u.full_name }}</div></td>
+        <td>{{ u.get_role_display }}</td>
+        <td class="small {% if 'NOTHING' in u.scope_summary %}bad{% endif %}">{{ u.scope_summary }}</td>
+        <td>{% if u.mfa_ok %}<span class="ok">ok</span>{% else %}<span class="bad">not enrolled</span>{% endif %}</td>
+        <td class="small">{{ u.employee.employee_code|default:"&mdash;" }}</td>
+        <td class="small">{{ u.last_login|date:"j M H:i"|default:"never" }}</td>
+        <td class="small">
+          <a href="{% url 'useradmin:edit' u.uuid %}">Edit</a> &middot;
+          <form method="post" action="{% url 'useradmin:toggle' u.uuid %}" class="inline">
+            {% csrf_token %}
+            <button type="submit" class="linkish">{% if u.is_active %}Disable{% else %}Enable{% endif %}</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<section class="card">
+  <h2>What each role can do</h2>
+  <table class="grid">
+    <thead><tr><th>Role</th><th>Can</th><th>Cannot</th><th>Requires</th></tr></thead>
+    <tbody>
+      {% for r in roles %}
+        <tr>
+          <td><b>{{ r.label }}</b><div class="muted small">{{ r.action_count }} capabilities</div></td>
+          <td class="small">{{ r.can|join:", " }}</td>
+          <td class="small muted">{{ r.cannot|join:", " }}</td>
+          <td class="small">
+            {% if r.needs_mfa %}authenticator app{% endif %}
+            {% if r.needs_scope %}{% if r.needs_mfa %}, {% endif %}an access scope{% endif %}
+            {% if not r.needs_mfa and not r.needs_scope %}&mdash;{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <p class="muted small">
+    Developer and Super Admin are deliberately separate. A Developer can change
+    how matching works but cannot approve tracking requests, manage users, or
+    purge data &mdash; deep technical access must never become authority over
+    people.
+  </p>
+</section>
+{% endblock %}

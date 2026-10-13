@@ -1,0 +1,8 @@
+<nav class="tabs">
+  <a href="{% url 'tracking:movement_review' %}" {% if review_tab == 'movements' %}class="active"{% endif %}>
+    Implausible movements <span class="count">{{ queue_counts.movements }}</span></a>
+  <a href="{% url 'tracking:correction_queue' %}" {% if review_tab == 'corrections' %}class="active"{% endif %}>
+    Corrections <span class="count">{{ queue_counts.corrections }}</span></a>
+  <a href="{% url 'tracking:unknown_faces' %}" {% if review_tab == 'unknown' %}class="active"{% endif %}>
+    Unknown faces <span class="count">{{ queue_counts.unknown }}</span></a>
+</nav>

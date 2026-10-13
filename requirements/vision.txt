@@ -1,0 +1,22 @@
+# Vision workers only. Deliberately has NO Django dependency - the `vision/`
+# package must stay importable and testable without the web stack.
+# Installed on top of a CPU or CUDA base image (see docker/vision/Dockerfile).
+
+numpy>=1.26,<2.3
+opencv-python-headless>=4.11,<5
+psycopg[binary]>=3.2,<3.3     # read-only: load the face gallery
+redis>=5.2,<6                 # publish events to the Redis Stream
+boto3>=1.37,<2                # write snapshots to MinIO / S3
+pydantic>=2.11,<3             # event schema validation at the boundary
+
+# onnxruntime is installed by the Dockerfile via the ONNX_PACKAGE build arg
+# (onnxruntime for CPU, onnxruntime-gpu for CUDA) so one requirements file
+# serves both images.
+
+# Phase 2 adds the model wrappers:
+#   insightface>=0.7,<0.8     # SCRFD detector + ArcFace embedder
+#   scikit-image>=0.25,<0.26  # face alignment helpers
+#   lap>=0.5,<0.6             # ByteTrack assignment
+
+# Needed to decrypt camera credentials written by the web tier.
+cryptography>=44,<46

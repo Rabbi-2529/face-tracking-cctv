@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Tracking requests{% endblock %}
+{% block content %}
+<h1>Tracking requests</h1>
+<p class="muted">
+  Following a named individual requires a written reason and someone else's
+  approval, and it expires by itself.
+</p>
+
+{% if can_create %}<a class="button" href="{% url 'watchlist:create' %}">New request</a>{% endif %}
+
+<form method="get" class="inline-form">
+  <label>Status
+    <select name="status" onchange="this.form.submit()">
+      <option value="">All</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </label>
+</form>
+
+{% for r in requests %}
+<section class="card request status-{{ r.status }}">
+  <header>
+    <b>{{ r.employee.full_name }}</b>
+    <span class="muted">{{ r.employee.employee_code }}</span>
+    <span class="status-chip">{{ r.get_status_display }}{% if r.status == 'approved' and r.is_active %} &middot; {{ r.seconds_remaining }}s left{% endif %}</span>
+  </header>
+  <dl class="kv">
+    <dt>Purpose</dt><dd>{{ r.get_purpose_display }}</dd>
+    <dt>Reason</dt><dd>{{ r.reason }}</dd>
+    <dt>Scope</dt><dd>{{ r.get_scope_display }}</dd>
+    <dt>Data window</dt><dd>{{ r.data_from|date:"j M H:i" }} to {{ r.data_to|date:"j M H:i" }}</dd>
+    <dt>Requested by</dt><dd>{{ r.requested_by.email }} on {{ r.requested_at|date:"j M Y H:i" }}</dd>
+    {% if r.approved_by %}<dt>Decided by</dt><dd>{{ r.approved_by.email }} on {{ r.approved_at|date:"j M Y H:i" }}</dd>{% endif %}
+    {% if r.decision_note %}<dt>Note</dt><dd>{{ r.decision_note }}</dd>{% endif %}
+    <dt>Used</dt><dd>{{ r.sessions.count }} session(s)</dd>
+  </dl>
+
+  {% if can_approve %}
+    {% if r.status == 'pending' %}
+      {% if r.requested_by_id == user.id %}
+        <p class="banner warn small">You raised this request, so you cannot approve it.</p>
+      {% else %}
+        <form method="post" action="{% url 'watchlist:decide' r.uuid %}" class="decide">
+          {% csrf_token %}
+          <label>Window (hours) <input type="number" name="window_hours" value="48" min="1" max="168"></label>
+          <input name="note" placeholder="Decision note">
+          <button name="decision" value="approve" class="ok-btn">Approve</button>
+          <button name="decision" value="reject" class="bad-btn">Reject</button>
+        </form>
+      {% endif %}
+    {% elif r.status == 'approved' and r.is_active %}
+      <form method="post" action="{% url 'watchlist:decide' r.uuid %}" class="decide">
+        {% csrf_token %}
+        <input name="note" placeholder="Why revoke">
+        <button name="decision" value="revoke" class="bad-btn">Revoke now</button>
+      </form>
+    {% endif %}
+  {% endif %}
+
+  {% if r.status == 'approved' and r.is_active %}
+    <a href="{% url 'tracking:employee_timeline' r.employee.uuid %}">Open timeline</a>
+    {% if r.scope != 'historical' and r.requested_by_id == user.id or r.scope != 'historical' and r.approved_by_id == user.id %}
+      &middot; <a href="{% url 'watchlist:follow' r.uuid %}">Follow live</a>
+    {% endif %}
+  {% endif %}
+</section>
+{% empty %}
+<p class="muted">No requests to show.</p>
+{% endfor %}
+{% endblock %}

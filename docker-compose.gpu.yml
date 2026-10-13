@@ -1,0 +1,33 @@
+# ---------------------------------------------------------------------------
+# GPU overlay for the vision tier. Requires the NVIDIA Container Toolkit on
+# the host (`nvidia-ctk --version` should work).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+#     --profile vision up -d --build vision
+#
+# Verify the GPU is visible inside the container:
+#   docker compose exec vision python -c \
+#     "import onnxruntime as o; print(o.get_available_providers())"
+# Expect CUDAExecutionProvider in that list.
+# ---------------------------------------------------------------------------
+services:
+  vision:
+    build:
+      args:
+        BASE_IMAGE: nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+        ONNX_PACKAGE: onnxruntime-gpu==1.21.0
+    image: cctv-tracking/vision:cuda
+    environment:
+      EXEC_PROVIDER: CUDAExecutionProvider
+      # NVDEC hardware video decode - without this, CPU decode caps you at a
+      # handful of 1080p streams regardless of GPU inference headroom.
+      OPENCV_FFMPEG_CAPTURE_OPTIONS: "rtsp_transport;tcp|hwaccel;cuda|stimeout;5000000"
+      NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      NVIDIA_DRIVER_CAPABILITIES: compute,utility,video
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu, utility, video]

@@ -1,0 +1,53 @@
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings"
+python_files = ["test_*.py"]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers --reuse-db"
+filterwarnings = ["error::DeprecationWarning:apps.*"]
+
+[tool.ruff]
+line-length = 90
+target-version = "py312"
+exclude = ["*/migrations/*", "staticfiles", "media"]
+
+[tool.ruff.lint]
+select = [
+  "E",    # pycodestyle
+  "F",    # pyflakes
+  "I",    # isort
+  "UP",   # pyupgrade
+  "B",    # bugbear
+  "DJ",   # flake8-django
+  "C4",   # comprehensions
+  "SIM",  # simplify
+]
+ignore = [
+  "E501",    # line length is handled by the formatter
+  "B008",    # function call in default argument (Django idiom)
+  "SIM105",  # contextlib.suppress is not always clearer
+  # Nested `with psycopg.connect(...) as conn: with conn.cursor() as cur:`
+  # reads better than one long combined statement.
+  "SIM117",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]
+"config/settings.py" = ["F405", "F403"]
+# can_view_history / can_follow_live resolve access as a deliberate ladder of
+# widest-grant-first checks. Collapsing the nested ifs into compound
+# conditions would make the resolution order much harder to follow.
+"apps/common/permissions.py" = ["SIM102"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config", "vision"]
+
+[tool.coverage.run]
+source = ["apps", "vision"]
+omit = ["*/migrations/*", "*/tests/*", "config/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "pragma: no cover",
+  "raise NotImplementedError",
+  "if TYPE_CHECKING:",
+]

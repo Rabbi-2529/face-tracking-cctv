@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}{% if camera %}Edit {{ camera.code }}{% else %}Add camera{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if camera %}Edit camera{% else %}Add camera{% endif %}</h1>
+{% if camera %}<p class="muted"><code>{{ camera.code }}</code> in {{ camera.zone.name }}</p>{% endif %}
+
+{% for w in warnings %}<div class="banner warn">{{ w }}</div>{% endfor %}
+{{ form.non_field_errors }}
+
+<form method="post" class="card stacked">
+  {% csrf_token %}
+
+  <h2>Identity</h2>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'name' or f.name == 'code' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'zone' or f.name == 'group' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <p class="muted small">
+    Zones marked never-tracked are not listed here, so a camera cannot be
+    pointed at a toilet or changing room from this form.
+  </p>
+
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'vendor' or f.name == 'purpose' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+
+  <div class="banner" id="vendor-help">
+    {% for value, text in vendor_help.items %}
+      <span class="vendor-note" data-vendor="{{ value }}" hidden>{{ text|safe }}</span>
+    {% endfor %}
+  </div>
+
+  <h2>Stream address</h2>
+  <div class="radio-group">{{ form.connection_mode }}</div>
+  {{ form.connection_mode.errors }}
+
+  <div id="build-fields">
+    <div class="field-row">
+      {% for f in form %}{% if f.name == 'host' or f.name == 'rtsp_port' %}
+        <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+      {% endif %}{% endfor %}
+    </div>
+    <div class="field-row">
+      {% for f in form %}{% if f.name == 'username' or f.name == 'password' %}
+        <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+      {% endif %}{% endfor %}
+    </div>
+    <div class="field-row">
+      {% for f in form %}{% if f.name == 'channel' or f.name == 'stream' %}
+        <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+      {% endif %}{% endfor %}
+    </div>
+  </div>
+
+  <div id="raw-fields">
+    <label>{{ form.raw_url.label }}
+      {{ form.raw_url }}
+      <span class="muted small">{{ form.raw_url.help_text }}</span>
+      {{ form.raw_url.errors }}
+    </label>
+  </div>
+
+  <p class="muted small">
+    The stream address is a working credential for a device on your network.
+    It is stored in an encrypted column and is never shown back on this page.
+  </p>
+
+  <h2>Streaming</h2>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'width' or f.name == 'height' or f.name == 'native_fps' or f.name == 'sample_fps' %}
+      <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+
+  <h2>Placement</h2>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'mount_height_cm' or f.name == 'tilt_degrees' %}
+      <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <label>{{ form.calibration_notes.label }}{{ form.calibration_notes }}</label>
+  <p class="muted small">
+    Identity cameras belong at a doorway, 180&ndash;220cm high, tilted under
+    15&ndash;20 degrees, facing people as they walk toward them. A ceiling dome
+    angled steeply down will not name anyone.
+  </p>
+
+  <label class="check">{{ form.is_enabled }} Enabled &mdash; a worker will start ingesting this camera</label>
+
+  <div class="form-actions">
+    <button type="submit">Save camera</button>
+    <a href="{% if camera %}{% url 'cameras:detail' camera.code %}{% else %}{% url 'cameras:list' %}{% endif %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  function sync() {
+    var mode = document.querySelector('input[name="connection_mode"]:checked');
+    var build = mode && mode.value === 'build';
+    document.getElementById('build-fields').hidden = !build;
+    document.getElementById('raw-fields').hidden = build;
+
+    var vendorSelect = document.querySelector('[name="vendor"]');
+    var vendor = vendorSelect ? vendorSelect.value : '';
+    document.querySelectorAll('.vendor-note').forEach(function (n) {
+      n.hidden = n.dataset.vendor !== vendor;
+    });
+  }
+  document.querySelectorAll('input[name="connection_mode"], [name="vendor"]')
+    .forEach(function (el) { el.addEventListener('change', sync); });
+  sync();
+})();
+</script>
+{% endblock %}

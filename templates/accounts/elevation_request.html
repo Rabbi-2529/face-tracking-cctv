@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Request break-glass access{% endblock %}
+{% block content %}
+<div class="card" style="max-width: 640px">
+  <h1>Request break-glass access</h1>
+  <p class="muted">
+    For debugging production when you genuinely need to see real identities.
+    A Super Admin must approve it; it then lasts at most {{ max_hours }} hours
+    and ends by itself. Everything you look at while it is active is in the
+    audit log as usual. It can never grant approving requests, managing users
+    or purging data.
+  </p>
+  <form method="post" class="stacked">
+    {% csrf_token %}
+    <fieldset class="card-inset">
+      <legend class="small muted">Capabilities</legend>
+      {% for a in actions %}
+        <label class="check"><input type="checkbox" name="actions" value="{{ a }}"
+          {% if a in chosen %}checked{% endif %}> <code>{{ a }}</code></label>
+      {% endfor %}
+    </fieldset>
+    <label>Why do you need this? <span class="req">*</span>
+      <textarea name="reason" rows="4" required minlength="20"
+        placeholder="e.g. Ticket OPS-412: enrolment for one employee fails with a conflict; need to inspect their gallery.">{{ reason }}</textarea>
+    </label>
+    <div class="form-actions">
+      <button type="submit">Send request</button>
+      <a href="{% url 'accounts:my_account' %}">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

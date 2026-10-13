@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Audit log{% endblock %}
+{% block content %}
+<h1>Audit log</h1>
+<p class="muted">
+  {% if scope_is_all %}Showing all activity.{% else %}Showing your own activity only.{% endif %}
+  {{ paginator.count }} entries.
+</p>
+
+<form method="get" class="inline-form">
+  <input name="action" value="{{ request.GET.action }}" placeholder="Action prefix, e.g. history.">
+  <label class="check"><input type="checkbox" name="failures_only" {% if request.GET.failures_only %}checked{% endif %}> Denials only</label>
+  <button type="submit">Filter</button>
+  {% if scope_is_all %}
+    <a href="{% url 'tracking:audit_export' %}?{{ request.GET.urlencode }}">Export CSV</a>
+  {% endif %}
+</form>
+
+<table class="grid">
+  <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Subject</th>
+             <th>Reason</th><th>Address</th><th></th></tr></thead>
+  <tbody>
+    {% for e in entries %}
+      <tr {% if not e.success %}class="row-bad"{% endif %}>
+        <td class="small">{{ e.at|date:"j M H:i:s" }}</td>
+        <td class="small">{{ e.actor.email|default:"system" }}</td>
+        <td><code>{{ e.action }}</code></td>
+        <td class="small">{{ e.target_employee_code|default:"&mdash;" }}</td>
+        <td class="small muted">{{ e.reason|truncatechars:70 }}</td>
+        <td class="small">{{ e.ip_address|default:"&mdash;" }}</td>
+        <td>{% if not e.success %}<span class="bad">denied</span>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">No entries.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if page_obj.has_other_pages %}
+<nav class="pager">
+  {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

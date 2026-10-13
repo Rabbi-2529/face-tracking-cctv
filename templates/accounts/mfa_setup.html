@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Set up authenticator{% endblock %}
+{% block content %}
+<div class="centered card">
+  <h1>Authenticator setup</h1>
+  {% if already_enrolled %}
+    <div class="banner ok">An authenticator is already enrolled on this account.</div>
+    <p><a href="{% url 'tracking:dashboard' %}">Continue</a></p>
+  {% else %}
+    <p>Scan this with Google Authenticator, Authy or 1Password, then enter the
+       six-digit code to confirm.</p>
+    <div class="qr" id="qr" data-uri="{{ config_url }}"></div>
+    <details>
+      <summary>Cannot scan? Enter the key manually</summary>
+      <code class="break">{{ config_url }}</code>
+    </details>
+    <form method="post" class="stacked">
+      {% csrf_token %}
+      <label>Six-digit code
+        <input name="token" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus>
+      </label>
+      <button type="submit">Confirm</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+  var qrEl = document.getElementById('qr');
+  if (qrEl && qrEl.dataset.uri) {
+    new QRCode(qrEl, { text: qrEl.dataset.uri, width: 200, height: 200 });
+  }
+</script>
+{% endblock %}

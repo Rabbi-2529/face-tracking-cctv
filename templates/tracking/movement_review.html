@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Movement review{% endblock %}
+{% block content %}
+<h1>Review</h1>
+{% include "tracking/_review_tabs.html" %}
+<p class="muted">
+  Transitions the zone adjacency graph says could not have happened. A growing
+  queue means either a missing door in the graph or a matching problem, and
+  both make every timeline less reliable than it looks. Open the timeline to
+  check the evidence before deciding.
+</p>
+
+<table class="grid">
+  <thead><tr><th>When</th><th>Employee</th><th>From</th><th>To</th>
+             <th>Transit</th><th>Why flagged</th><th>Decision</th></tr></thead>
+  <tbody>
+    {% for m in events %}
+      <tr class="row-bad">
+        <td class="small">{{ m.occurred_at|date:"j M H:i:s" }}</td>
+        <td><a href="{% url 'tracking:employee_timeline' m.employee.uuid %}?date={{ m.occurred_at|date:'Y-m-d' }}">{{ m.employee.employee_code }}</a></td>
+        <td>{{ m.from_zone.name|default:"&mdash;" }}</td>
+        <td>{{ m.to_zone.name }}</td>
+        <td>{{ m.transit_seconds|default:"0" }}s</td>
+        <td class="small">{{ m.implausible_reason }}</td>
+        <td>
+          <form method="post" action="{% url 'tracking:movement_decide' m.pk %}" class="row-actions">
+            {% csrf_token %}
+            <button name="decision" value="confirm" class="ok-btn" title="It really happened">Real</button>
+            <button name="decision" value="reject" class="bad-btn" title="A wrong face match">Bad match</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">Nothing awaiting review.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+<p class="muted small">
+  If a movement was real, the usual cause is a missing door in the
+  <a href="{% url 'org:overview' %}#adjacency">movement topology</a>. Add the
+  connection so the same route stops being flagged.
+</p>
+
+{% if recent %}
+<section class="card">
+  <h2>Recently reviewed</h2>
+  <table class="grid">
+    <thead><tr><th>When</th><th>Employee</th><th>Route</th><th>Verdict</th></tr></thead>
+    <tbody>
+      {% for m in recent %}
+        <tr>
+          <td class="small">{{ m.occurred_at|date:"j M H:i" }}</td>
+          <td>{{ m.employee.employee_code }}</td>
+          <td class="small">{{ m.from_zone.name|default:"arrival" }} &rarr; {{ m.to_zone.name }}</td>
+          <td class="small {% if m.review_status == 'rejected' %}bad{% else %}ok{% endif %}">{{ m.get_review_status_display }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

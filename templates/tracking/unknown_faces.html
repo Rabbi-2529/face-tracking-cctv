@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Unknown faces{% endblock %}
+{% block content %}
+<h1>Review</h1>
+{% include "tracking/_review_tabs.html" %}
+<p class="muted">
+  Repeat sightings of a face that matches nobody enrolled, grouped together.
+  Ones seen in a restricted area come first. Label each one so it stops
+  coming back: a visitor or contractor, an employee who needs enrolling, a
+  member of staff who has not consented (never enrolled), or not a real face.
+  Clusters are deleted automatically once the face has not been seen for the
+  raw-detection retention period.
+</p>
+
+<form method="get" class="inline-form">
+  <label>Show
+    <select name="show" onchange="this.form.submit()">
+      <option value="unresolved" {% if show == 'unresolved' %}selected{% endif %}>Unresolved</option>
+      <option value="all" {% if show == 'all' %}selected{% endif %}>All</option>
+    </select>
+  </label>
+</form>
+
+{% for c in clusters %}
+<section class="card cluster {% if c.restricted_hits %}status-rejected{% endif %}">
+  <div class="cluster-body">
+    <div class="cluster-face">
+      {% if can_view_snapshots and c.representative_snapshot_key %}
+        <button type="button" class="linkish" data-reveal="{% url 'tracking:cluster_snapshot' c.uuid %}">Show image</button>
+        <img alt="Representative sighting" hidden>
+      {% else %}
+        <span class="muted small">no image</span>
+      {% endif %}
+    </div>
+    <div class="cluster-info">
+      <header class="request-head">
+        <b>{{ c.label|default:"Unlabelled" }}</b>
+        <span class="muted small">{{ c.uuid|stringformat:"s"|slice:":8" }}</span>
+        <span class="status-chip">{{ c.get_resolution_display }}</span>
+      </header>
+      <dl class="kv">
+        <dt>Sightings</dt><dd>{{ c.sighting_count }}</dd>
+        <dt>Seen</dt><dd>{{ c.first_seen|date:"j M H:i" }} to {{ c.last_seen|date:"j M H:i" }}</dd>
+        <dt>Zones</dt>
+        <dd>{% for z in c.zones_seen.all %}<span class="{% if z.is_restricted %}bad{% endif %}">{{ z.name }}</span>{% if not forloop.last %}, {% endif %}{% endfor %}
+            {% if c.restricted_hits %}<b class="bad">&middot; seen in a restricted area</b>{% endif %}</dd>
+        {% if c.notes %}<dt>Notes</dt><dd>{{ c.notes }}</dd>{% endif %}
+      </dl>
+      <form method="post" action="{% url 'tracking:unknown_resolve' c.uuid %}" class="decide">
+        {% csrf_token %}
+        <select name="resolution">
+          {% for value, label in form.fields.resolution.choices %}
+            <option value="{{ value }}" {% if c.resolution == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+        <input name="label" value="{{ c.label }}" placeholder="Label, e.g. 'courier, Tuesdays'">
+        <select name="resolved_as_employee">
+          <option value="">Employee (if known)</option>
+          {% for value, label in form.fields.resolved_as_employee.choices %}
+            {% if value %}<option value="{{ value }}" {% if c.resolved_as_employee_id|stringformat:"s" == value|stringformat:"s" %}selected{% endif %}>{{ label }}</option>{% endif %}
+          {% endfor %}
+        </select>
+        <input name="notes" value="{{ c.notes }}" placeholder="Notes">
+        <button type="submit">Save</button>
+      </form>
+    </div>
+  </div>
+</section>
+{% empty %}
+<p class="muted">No unknown faces to review.</p>
+{% endfor %}
+
+{% if page_obj.has_other_pages %}
+<nav class="pager">
+  {% if page_obj.has_previous %}<a href="?show={{ show }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a href="?show={{ show }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Images load only when asked for: each one is an audited fetch.
+document.querySelectorAll('[data-reveal]').forEach(function (button) {
+  button.addEventListener('click', function () {
+    var img = button.parentElement.querySelector('img');
+    if (!img.src) { img.src = button.dataset.reveal; }
+    img.hidden = !img.hidden;
+    button.textContent = img.hidden ? 'Show image' : 'Hide image';
+  });
+});
+</script>
+{% endblock %}

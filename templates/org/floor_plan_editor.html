@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}Zone outlines - {{ floor }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Zone outlines</h1>
+    <p class="muted">{{ floor.building.name }} / {{ floor.name }}</p>
+  </div>
+  <div class="head-actions"><a href="{% url 'org:overview' %}#building">Back to site</a></div>
+</div>
+
+{% if not has_plan %}
+  <div class="banner warn">
+    This floor has no plan image yet.
+    <a href="{% url 'org:edit' 'floor' floor.pk %}">Upload one</a>, then come back to draw zones.
+  </div>
+{% elif not zones %}
+  <div class="banner warn">No zones on this floor yet. <a href="{% url 'org:create' 'zone' %}">Add a zone</a> first.</div>
+{% else %}
+<p class="muted">
+  Pick a zone, then click its corners on the plan in order. <b>Save</b> stores the
+  outline; <b>Undo</b> removes the last point. Outlines drive the live board and
+  the movement map. Never-tracked zones can be placed here but are never shown
+  on a monitoring view.
+</p>
+
+<div class="plan-editor">
+  <aside class="card">
+    <label class="small muted">Zone</label>
+    <ul class="zone-picker" id="zone-picker">
+      {% for z in zones %}
+        <li><button type="button" class="linkish" data-zone="{{ z.pk }}">
+          {{ z.name }}{% if z.tracking_prohibited %} <span class="small muted">(never tracked)</span>{% endif %}
+          <span class="small {% if z.plan_polygon %}ok{% else %}muted{% endif %}" data-state>
+            {% if z.plan_polygon %}outlined{% else %}not drawn{% endif %}</span>
+        </button></li>
+      {% endfor %}
+    </ul>
+    <div class="form-actions">
+      <button type="button" id="save" class="ok-btn" disabled>Save</button>
+      <button type="button" id="undo" disabled>Undo</button>
+      <button type="button" id="clear" class="bad-btn" disabled>Clear</button>
+    </div>
+    <p class="small muted" id="status">Select a zone to start.</p>
+  </aside>
+
+  <div class="plan-canvas card">
+    <svg id="plan" viewBox="0 0 {{ floor.plan_width_px }} {{ floor.plan_height_px }}"
+         preserveAspectRatio="xMidYMid meet" role="img" aria-label="Floor plan">
+      <image href="{{ image_url }}" x="0" y="0"
+             width="{{ floor.plan_width_px }}" height="{{ floor.plan_height_px }}"></image>
+      <g id="others"></g>
+      <polygon id="current" class="plan-current"></polygon>
+      <g id="handles"></g>
+    </svg>
+  </div>
+</div>
+{{ outlines|json_script:"outlines" }}
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if has_plan and zones %}
+<script>
+(function () {
+  var svg = document.getElementById('plan');
+  var outlines = JSON.parse(document.getElementById('outlines').textContent);
+  var names = {};
+  document.querySelectorAll('[data-zone]').forEach(function (b) {
+    names[b.dataset.zone] = b.childNodes[0].textContent.trim();
+  });
+  var selected = null, points = [];
+  var NS = 'http://www.w3.org/2000/svg';
+  var status = document.getElementById('status');
+  var size = Math.max(4, Math.round(Math.min({{ floor.plan_width_px }}, {{ floor.plan_height_px }}) / 120));
+
+  function csrf() {
+    var m = document.cookie.match(/csrftoken=([^;]+)/);
+    return m ? m[1] : '';
+  }
+
+  function drawOthers() {
+    var g = document.getElementById('others');
+    g.innerHTML = '';
+    Object.keys(outlines).forEach(function (id) {
+      if (String(id) === String(selected) || !outlines[id] || outlines[id].length < 3) return;
+      var p = document.createElementNS(NS, 'polygon');
+      p.setAttribute('points', outlines[id].map(function (pt) { return pt.join(','); }).join(' '));
+      p.setAttribute('class', 'plan-zone');
+      var t = document.createElementNS(NS, 'title');
+      t.textContent = names[id] || '';
+      p.appendChild(t);
+      g.appendChild(p);
+    });
+  }
+
+  function drawCurrent() {
+    document.getElementById('current').setAttribute(
+      'points', points.map(function (pt) { return pt.join(','); }).join(' '));
+    var g = document.getElementById('handles');
+    g.innerHTML = '';
+    points.forEach(function (pt) {
+      var c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', pt[0]); c.setAttribute('cy', pt[1]); c.setAttribute('r', size);
+      c.setAttribute('class', 'plan-handle');
+      g.appendChild(c);
+    });
+    document.getElementById('save').disabled = !selected || (points.length > 0 && points.length < 3);
+    document.getElementById('undo').disabled = !points.length;
+    document.getElementById('clear').disabled = !selected;
+  }
+
+  document.getElementById('zone-picker').addEventListener('click', function (e) {
+    var b = e.target.closest('[data-zone]');
+    if (!b) return;
+    document.querySelectorAll('[data-zone]').forEach(function (x) { x.classList.remove('active'); });
+    b.classList.add('active');
+    selected = b.dataset.zone;
+    points = (outlines[selected] || []).map(function (pt) { return pt.slice(); });
+    status.textContent = 'Editing ' + names[selected] + '. Click the plan to add points.';
+    drawOthers(); drawCurrent();
+  });
+
+  svg.addEventListener('click', function (e) {
+    if (!selected) return;
+    var pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    var p = pt.matrixTransform(svg.getScreenCTM().inverse());
+    points.push([Math.round(p.x), Math.round(p.y)]);
+    drawCurrent();
+  });
+
+  document.getElementById('undo').onclick = function () { points.pop(); drawCurrent(); };
+  document.getElementById('clear').onclick = function () { points = []; drawCurrent(); };
+
+  document.getElementById('save').onclick = function () {
+    fetch('', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf()},
+      body: JSON.stringify({zone: selected, points: points})
+    }).then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
+      .then(function (res) {
+        if (!res[0]) { status.textContent = res[1].error || 'Could not save.'; return; }
+        outlines[selected] = res[1].points;
+        var state = document.querySelector('[data-zone="' + selected + '"] [data-state]');
+        state.textContent = res[1].points.length ? 'outlined' : 'not drawn';
+        state.className = 'small ' + (res[1].points.length ? 'ok' : 'muted');
+        status.textContent = 'Saved ' + names[selected] + '.';
+      })
+      .catch(function () { status.textContent = 'Could not save.'; });
+  };
+})();
+</script>
+{% endif %}
+{% endblock %}

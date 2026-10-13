@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.full_name }} - {{ day|date:"j M Y" }}{% endblock %}
+{% block content %}
+<h1>{{ employee.full_name }}</h1>
+<p class="muted">{{ employee.employee_code }} &middot;
+   {{ employee.department.name|default:"no department" }}</p>
+
+<nav class="daynav">
+  <a href="?date={{ prev_day|date:'Y-m-d' }}">&larr; {{ prev_day|date:"j M" }}</a>
+  <b>{{ day|date:"l j F Y" }}</b>
+  <a href="?date={{ next_day|date:'Y-m-d' }}">{{ next_day|date:"j M" }} &rarr;</a>
+</nav>
+
+{% if access_windows is not None %}
+<div class="banner {% if day_outside_windows %}warn{% endif %} small">
+  Your access to this person comes from a tracking request and covers only
+  {% for w in access_windows %}{{ w.0|date:"j M H:i" }} to {{ w.1|date:"j M H:i" }}{% if not forloop.last %}; {% endif %}{% endfor %}.
+  {% if day_outside_windows %}This day is outside that window, so nothing is shown.{% endif %}
+</div>
+{% endif %}
+
+{% if low_confidence_count or implausible_count %}
+<div class="banner warn">
+  <b>Read this timeline with care.</b>
+  {% if low_confidence_count %}{{ low_confidence_count }} of {{ intervals|length }}
+    entries rest on a probable rather than confirmed match.{% endif %}
+  {% if implausible_count %} {{ implausible_count }} transition(s) are physically
+    implausible and are under review.{% endif %}
+  Treat this as a lead to verify, not as a record of fact.
+</div>
+{% endif %}
+
+<div class="tiles">
+  <div class="tile"><span class="n">{{ intervals|length }}</span><span class="l">zone stays</span></div>
+  <div class="tile"><span class="n">{{ movements|length }}</span><span class="l">movements</span></div>
+  <div class="tile"><span class="n">{{ total_seconds }}</span><span class="l">seconds on site</span></div>
+</div>
+
+{% if movement_map %}
+<section class="card">
+  <div class="page-head">
+    <h2>Movement map</h2>
+    <div class="head-actions"><button type="button" id="play-path">Play the day</button></div>
+  </div>
+  <p class="muted small">
+    Numbers are the order of the day's stops. A line between two stops says
+    the person was seen in one room and then the next - not the route walked
+    between them.
+  </p>
+  {% for d in movement_map %}
+    <h3 class="small muted">{{ d.floor.building.name }} / {{ d.floor.name }}</h3>
+    <svg class="plan map-plan" id="{{ d.dom_id }}" viewBox="0 0 {{ d.width }} {{ d.height }}"
+         preserveAspectRatio="xMidYMid meet" role="img"
+         aria-label="Path on {{ d.floor.name }}">
+      <image href="{{ d.image_url }}" x="0" y="0" width="{{ d.width }}" height="{{ d.height }}"></image>
+      {% for s in d.shapes %}
+        <polygon class="plan-zone" points="{{ s.points }}"><title>{{ s.name }}</title></polygon>
+      {% endfor %}
+      {% if d.stops|length > 1 %}<polyline class="map-path" points="{{ d.path }}"></polyline>{% endif %}
+      {% for s in d.stops %}
+        <g class="map-stop conf-{{ s.confidence }}" data-n="{{ s.n }}">
+          <circle cx="{{ s.x }}" cy="{{ s.y }}" r="{{ d.font_size }}"></circle>
+          <text x="{{ s.x }}" y="{{ s.y }}" font-size="{{ d.font_size }}">{{ s.n }}</text>
+          <title>{{ s.n }}. {{ s.zone }} at {{ s.at }}</title>
+        </g>
+      {% endfor %}
+      <circle class="map-walker" r="{{ d.font_size }}" cx="-100" cy="-100"></circle>
+    </svg>
+    {{ d.stops|json_script:d.data_id }}
+  {% endfor %}
+  <p class="small muted" id="play-status"></p>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Timeline</h2>
+  <ol class="timeline">
+    {% for i in intervals %}
+      <li class="conf-{{ i.confidence }}{% if i.correction_state %} corr-{{ i.correction_state }}{% endif %}">
+        <span class="t">{{ forloop.counter }}. {{ i.entered_at|date:"H:i:s" }}</span>
+        <span class="z">{{ i.zone.name }}
+          {% if i.correction_state == "corrected" %}<span class="badge bad">not this person</span>
+          {% elif i.correction_state == "disputed" %}<span class="badge warnc">disputed</span>{% endif %}
+        </span>
+        <span class="d muted">
+          {% if i.exited_at %}until {{ i.exited_at|date:"H:i:s" }}
+            ({{ i.duration_seconds }}s){% else %}<b class="ok">still present</b>{% endif %}
+        </span>
+        <span class="c small">{{ i.get_confidence_display }}{% if i.is_inferred %} &middot; inferred{% endif %}
+          {% if can_view_snapshots and i.first_snapshot_key %}
+            &middot; <button type="button" class="linkish" data-evidence="{% url 'tracking:interval_snapshot' i.pk 'first' %}">evidence</button>
+          {% endif %}
+        </span>
+        {% if can_view_snapshots and i.first_snapshot_key %}
+          <img class="evidence" alt="Snapshot for entry {{ forloop.counter }}" hidden>
+        {% endif %}
+      </li>
+    {% empty %}
+      <li class="muted">No recorded presence on this day.</li>
+    {% endfor %}
+  </ol>
+  {% if can_view_snapshots %}
+    <p class="small muted">Each evidence image you open is recorded in the audit log.</p>
+  {% endif %}
+</section>
+
+{% if movements %}
+<section class="card">
+  <h2>Movements</h2>
+  <table class="grid">
+    <thead><tr><th>Time</th><th>From</th><th>To</th><th>Transit</th><th>Plausible</th></tr></thead>
+    <tbody>
+      {% for m in movements %}
+        <tr {% if not m.is_plausible %}class="row-bad"{% endif %}>
+          <td>{{ m.occurred_at|date:"H:i:s" }}</td>
+          <td>{{ m.from_zone.name|default:"arrival" }}</td>
+          <td>{{ m.to_zone.name }}</td>
+          <td>{% if m.transit_seconds %}{{ m.transit_seconds }}s{% else %}&mdash;{% endif %}</td>
+          <td>{% if m.is_plausible %}yes{% else %}<b class="bad" title="{{ m.implausible_reason }}">no</b>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Something wrong here?</h2>
+  <p>If any entry is not this person, say so. Corrections are acted on and feed
+     back into tuning.</p>
+  <form method="post" action="{% url 'tracking:report_correction' employee.uuid %}" class="stacked">
+    {% csrf_token %}
+    {% if intervals %}
+    <label>Which entry (optional)
+      <select name="interval">
+        <option value="">Not sure / several</option>
+        {% for i in intervals %}
+          <option value="{{ i.pk }}">{{ forloop.counter }}. {{ i.entered_at|date:"H:i" }} {{ i.zone.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% endif %}
+    <label>What is wrong
+      <input name="reason" required placeholder="e.g. the 14:05 pantry entry is not me">
+    </label>
+    <button type="submit">Report wrong identification</button>
+  </form>
+  {% if can_follow_live %}
+    <p class="muted small">You hold a live-follow authorisation for this person.
+      Open it from <a href="{% url 'watchlist:list' %}">tracking requests</a>.</p>
+  {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // Evidence loads only when asked for: each image is an audited fetch.
+  document.querySelectorAll('[data-evidence]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var img = button.closest('li').querySelector('img.evidence');
+      if (!img.src) { img.src = button.dataset.evidence; }
+      img.hidden = !img.hidden;
+      button.textContent = img.hidden ? 'evidence' : 'hide evidence';
+    });
+  });
+
+  var play = document.getElementById('play-path');
+  if (!play) { return; }
+  var status = document.getElementById('play-status');
+
+  play.addEventListener('click', function () {
+    var maps = Array.prototype.slice.call(document.querySelectorAll('svg.map-plan'));
+    var steps = [];
+    maps.forEach(function (svg) {
+      JSON.parse(document.getElementById(svg.id + '-stops').textContent)
+        .forEach(function (stop) { steps.push({svg: svg, stop: stop}); });
+    });
+    steps.sort(function (a, b) { return a.stop.n - b.stop.n; });
+    if (!steps.length) { return; }
+
+    play.disabled = true;
+    var index = 0;
+    (function next() {
+      maps.forEach(function (svg) {
+        svg.querySelector('.map-walker').setAttribute('cx', -100);
+        svg.querySelectorAll('.map-stop').forEach(function (g) { g.classList.remove('current'); });
+      });
+      if (index >= steps.length) {
+        status.textContent = '';
+        play.disabled = false;
+        return;
+      }
+      var step = steps[index];
+      var walker = step.svg.querySelector('.map-walker');
+      walker.setAttribute('cx', step.stop.x);
+      walker.setAttribute('cy', step.stop.y);
+      var marker = step.svg.querySelector('.map-stop[data-n="' + step.stop.n + '"]');
+      if (marker) { marker.classList.add('current'); }
+      status.textContent = step.stop.n + '. ' + step.stop.zone + ' at ' + step.stop.at;
+      index += 1;
+      setTimeout(next, 1100);
+    })();
+  });
+})();
+</script>
+{% endblock %}

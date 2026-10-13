@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Consent &mdash; {{ employee.full_name }}{% endblock %}
+{% block content %}
+<h1>Consent to biometric processing</h1>
+<p class="muted">{{ employee.full_name }} &middot; {{ employee.employee_code }}</p>
+
+<div class="banner warn">
+  Face templates are <b>sensitive personal data</b>. Consent is only valid if
+  this person was given the privacy notice first &mdash; what is collected, why,
+  who can see it, and how long it is kept. Keep the signed notice: "we told
+  everyone" is not evidence.
+</div>
+
+{% if current %}
+<div class="banner ok">
+  <b>Consent is currently active.</b>
+  Version {{ current.policy_version }}, {{ current.get_method_display|lower }},
+  given {{ current.consented_at|date:"j M Y" }}.
+</div>
+
+<form method="post" class="card">
+  {% csrf_token %}
+  <h2>Withdraw consent</h2>
+  <p class="muted small">
+    Deactivates every enrolled image immediately; matching stops within about
+    30 seconds. Historical records are unaffected and age out under the
+    retention policy.
+  </p>
+  <div class="decide">
+    <input name="note" placeholder="Reason (recorded in the audit log)">
+    <button type="submit" name="withdraw" value="1" class="bad-btn">Withdraw consent</button>
+  </div>
+</form>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="card stacked">
+  {% csrf_token %}
+  <h2>{% if current %}Record new consent{% else %}Record consent{% endif %}</h2>
+  {{ form.non_field_errors }}
+  {% for f in form %}
+    <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+      {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit">Record consent</button>
+    <a href="{% url 'employees:setup' employee.uuid %}">Cancel</a>
+  </div>
+</form>
+
+{% if history %}
+<section class="card">
+  <h2>History</h2>
+  <table class="grid">
+    <thead><tr><th>Given</th><th>Policy</th><th>Method</th><th>By</th><th>Withdrawn</th></tr></thead>
+    <tbody>
+      {% for c in history %}
+        <tr {% if c.withdrawn_at %}class="muted"{% endif %}>
+          <td>{{ c.consented_at|date:"j M Y H:i" }}</td>
+          <td><code>{{ c.policy_version }}</code></td>
+          <td>{{ c.get_method_display }}</td>
+          <td class="small">{{ c.recorded_by.email|default:"-" }}</td>
+          <td>{% if c.withdrawn_at %}{{ c.withdrawn_at|date:"j M Y" }}
+              {% if c.withdrawal_note %}<div class="muted small">{{ c.withdrawal_note }}</div>{% endif %}
+              {% else %}<span class="ok">active</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

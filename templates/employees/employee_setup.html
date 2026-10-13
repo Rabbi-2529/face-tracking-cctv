@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ employee.full_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ employee.full_name }}</h1>
+    <p class="muted">
+      {{ employee.employee_code }} &middot;
+      {{ employee.department.name|default:"no department" }} &middot;
+      {{ employee.get_status_display }}
+    </p>
+  </div>
+  <div class="head-actions">
+    <a class="button" href="{% url 'tracking:employee_timeline' employee.uuid %}">Timeline</a>
+  </div>
+</div>
+
+{% if all_done %}
+  <div class="banner ok"><b>Fully set up.</b> This person will be matched by the pipeline.</div>
+{% else %}
+  <div class="banner warn">
+    <b>Not matchable yet.</b> The pipeline needs all of: active status,
+    trackable, an active consent record, and at least one enrolled face image.
+  </div>
+{% endif %}
+
+<ol class="steps">
+  {% for step in steps %}
+    <li class="{% if step.done %}done{% else %}todo{% endif %}">
+      <span class="marker">{% if step.done %}&#10003;{% else %}{{ forloop.counter }}{% endif %}</span>
+      <div class="body">
+        <b>{{ step.label }}</b>
+        <div class="muted small">{{ step.detail }}</div>
+      </div>
+      {% if step.key == 'record' and can_manage %}
+        <a class="button" href="{{ step.url }}">{{ step.action }}</a>
+      {% elif step.key == 'consent' and can_consent %}
+        <a class="button" href="{{ step.url }}">{{ step.action }}</a>
+      {% elif step.key == 'faces' and can_enroll %}
+        <a class="button" href="{{ step.url }}">{{ step.action }}</a>
+      {% endif %}
+    </li>
+  {% endfor %}
+</ol>
+
+{% if coverage.advice %}
+<div class="banner warn">
+  <b>To improve recognition for this person:</b>
+  <ul class="tight">{% for item in coverage.advice %}<li>{{ item }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{% if coverage.flagged_count %}
+<div class="banner error">
+  {{ coverage.flagged_count }} enrolled image(s) are flagged as matching a
+  different employee and are held out of use.
+  <a href="{% url 'employees:enroll' employee.uuid %}">Review them</a>.
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>Consent history</h2>
+  <table class="grid">
+    <thead><tr><th>Given</th><th>Policy</th><th>Method</th><th>Evidence</th><th>Withdrawn</th></tr></thead>
+    <tbody>
+      {% for c in consent_history %}
+        <tr {% if c.withdrawn_at %}class="muted"{% endif %}>
+          <td>{{ c.consented_at|date:"j M Y H:i" }}</td>
+          <td><code>{{ c.policy_version }}</code></td>
+          <td>{{ c.get_method_display }}</td>
+          <td>{% if c.document %}<span class="ok">attached</span>{% else %}<span class="warnc">none</span>{% endif %}</td>
+          <td>{% if c.withdrawn_at %}{{ c.withdrawn_at|date:"j M Y" }}{% else %}<span class="ok">active</span>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No consent has ever been recorded for this person.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p><a href="{% url 'tracking:employee_list' %}">Back to employees</a></p>
+{% endblock %}

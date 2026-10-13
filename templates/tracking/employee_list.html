@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Employees{% endblock %}
+{% block content %}
+<h1>Employees</h1>
+<div class="page-head">
+  <p class="muted">{{ paginator.count }} in your scope.</p>
+  {% if 'employee.manage' in granted_actions %}
+    <a class="button" href="{% url 'employees:create' %}">Add employee</a>
+  {% endif %}
+</div>
+
+<form method="get" class="inline-form">
+  <input name="q" value="{{ request.GET.q }}" placeholder="Name or employee code">
+  <button type="submit">Search</button>
+</form>
+
+<table class="grid">
+  <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Status</th>
+             <th>Enrolments</th><th>Matchable</th><th></th></tr></thead>
+  <tbody>
+    {% for e in employees %}
+      <tr>
+        <td><code>{{ e.employee_code }}</code></td>
+        <td>{{ e.full_name }}</td>
+        <td>{{ e.department.name|default:"&mdash;" }}</td>
+        <td>{{ e.get_status_display }}</td>
+        <td {% if e.enrollment_count < 5 %}class="warn-cell"{% endif %}>
+          {{ e.enrollment_count }}{% if e.enrollment_count < 5 %}
+            <span class="small">5+ recommended</span>{% endif %}
+        </td>
+        <td>{% if e.is_processable %}<span class="ok">yes</span>{% else %}<span class="bad">no</span>{% endif %}</td>
+        <td>
+          <a href="{% url 'tracking:employee_timeline' e.uuid %}">Timeline</a>
+          {% if 'employee.view' in granted_actions %}
+            &middot; <a href="{% url 'employees:setup' e.uuid %}">Setup</a>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">No employees in your scope.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if page_obj.has_other_pages %}
+<nav class="pager">
+  {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&amp;q={{ request.GET.q }}">Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&amp;q={{ request.GET.q }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}

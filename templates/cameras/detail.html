@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block title %}{{ camera.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>{{ camera.name }}</h1>
+    <p class="muted">
+      <code>{{ camera.code }}</code> &middot; {{ camera.get_vendor_display }} &middot;
+      {{ camera.zone.name }} ({{ camera.zone.floor.name }})
+    </p>
+  </div>
+  <div class="head-actions">
+    {% if can_manage %}
+      <button id="test-btn" class="button">Test connection</button>
+      <a class="button" href="{% url 'cameras:edit' camera.code %}">Edit</a>
+      <form method="post" action="{% url 'cameras:toggle' camera.code %}" class="inline">
+        {% csrf_token %}
+        <button type="submit" class="{% if camera.is_enabled %}bad-btn{% else %}ok-btn{% endif %}">
+          {% if camera.is_enabled %}Disable{% else %}Enable{% endif %}
+        </button>
+      </form>
+    {% endif %}
+  </div>
+</div>
+
+<div id="test-result" hidden></div>
+
+<section class="card">
+  <div class="page-head">
+    <h2>Live view</h2>
+    <div class="head-actions">
+      <button id="live-start" class="button">Start live view</button>
+      <button id="live-stop" class="button bad-btn" hidden>Stop</button>
+    </div>
+  </div>
+  <p class="muted small">
+    Boxes are drawn around every detected face, coloured by whether it is
+    usable: <span class="ok">green</span> is big enough to identify,
+    <span class="warnc">amber</span> is marginal, <span class="bad">red</span>
+    is discarded. The number is the face width in pixels &mdash; the single
+    measurement that decides whether this camera can name anyone.
+  </p>
+  <div id="live-holder" hidden>
+    <img id="live-img" class="live-frame" alt="Live camera view with detections">
+    <p id="live-note" class="muted small"></p>
+    <p class="muted small">
+      Frames come from the camera worker, which is decoding this stream
+      anyway, so the live view costs almost nothing and any number of people
+      can watch. Overlays are only drawn while somebody is looking.
+      {% if 'history.any' not in granted_actions %}
+      <b>Your role sees faces but not names.</b>
+      {% endif %}
+    </p>
+  </div>
+</section>
+
+{% if camera.purpose == 'identity' and not camera.is_identity_capable %}
+<div class="banner error">
+  <b>This camera is set to identify people but cannot.</b>
+  {% if camera.measured_face_width_px %}
+    It measured faces at {{ camera.measured_face_width_px }}px; at least 60px is
+    needed, and 100px+ is comfortable.
+  {% else %}
+    It has never been audited, so its face size is unknown.
+  {% endif %}
+  Either reposition it at a doorway at face height, or change its purpose to
+  presence only.
+</div>
+{% endif %}
+
+<div class="tiles">
+  <div class="tile"><span class="n">{% if camera.is_enabled %}{{ camera.get_status_display }}{% else %}Disabled{% endif %}</span>
+    <span class="l">state</span></div>
+  <div class="tile"><span class="n">{{ totals.fps|floatformat:1|default:"-" }}</span>
+    <span class="l">fps, last 24h</span></div>
+  <div class="tile"><span class="n">{{ totals.seen|default:"0" }}</span>
+    <span class="l">faces detected, 24h</span></div>
+  <div class="tile {% if gate_rate and gate_rate > 0.5 %}warn-tile{% endif %}">
+    <span class="n">{% if gate_rate %}{{ gate_rate|floatformat:2 }}{% else %}-{% endif %}</span>
+    <span class="l">discarded as unusable</span></div>
+  <div class="tile"><span class="n">{{ detections.identified|default:"0" }}</span>
+    <span class="l">identified, 24h</span></div>
+  <div class="tile"><span class="n">{{ detections.unknown|default:"0" }}</span>
+    <span class="l">unknown faces, 24h</span></div>
+</div>
+
+{% if gate_rate and gate_rate > 0.5 %}
+<div class="banner warn">
+  More than half the faces this camera finds are discarded as unusable. That is
+  a placement problem, not a tuning problem &mdash; lower the camera, reduce the
+  tilt, or improve the lighting.
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>Configuration</h2>
+  <dl class="kv">
+    <dt>Purpose</dt><dd>{{ camera.get_purpose_display }}</dd>
+    <dt>Sampled at</dt><dd>{{ camera.sample_fps }} fps (of {{ camera.native_fps }} fps native)</dd>
+    <dt>Resolution</dt><dd>{{ camera.width }}x{{ camera.height }}</dd>
+    <dt>IP address</dt><dd>{{ camera.ip_address|default:"not recorded" }}</dd>
+    <dt>Mount height</dt><dd>{% if camera.mount_height_cm %}{{ camera.mount_height_cm }} cm{% else %}not recorded{% endif %}</dd>
+    <dt>Downward tilt</dt><dd>{% if camera.tilt_degrees %}{{ camera.tilt_degrees|floatformat:0 }} degrees{% else %}not recorded{% endif %}</dd>
+    <dt>Measured face</dt><dd>{% if camera.measured_face_width_px %}{{ camera.measured_face_width_px }} px{% else %}never audited{% endif %}</dd>
+    <dt>Stream address</dt><dd class="muted">stored encrypted, not shown</dd>
+  </dl>
+  {% if camera.calibration_notes %}<p class="muted small">{{ camera.calibration_notes }}</p>{% endif %}
+</section>
+
+{% if audits %}
+<section class="card">
+  <h2>Audit history</h2>
+  <table class="grid">
+    <thead><tr><th>When</th><th>Verdict</th><th>Median face</th><th>Faces</th><th>Frames</th></tr></thead>
+    <tbody>
+      {% for a in audits %}
+        <tr><td class="small">{{ a.ran_at|date:"j M Y H:i" }}</td>
+            <td>{{ a.get_verdict_display }}</td>
+            <td>{{ a.median_face_width_px|floatformat:0|default:"-" }} px</td>
+            <td>{{ a.faces_detected }}</td><td>{{ a.frames_sampled }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>Recent health</h2>
+  <table class="grid">
+    <thead><tr><th>When</th><th>Status</th><th>fps</th><th>Faces</th>
+               <th>Gated</th><th>Identified</th><th>Reconnects</th><th>Message</th></tr></thead>
+    <tbody>
+      {% for h in health %}
+        <tr {% if h.status != 'online' %}class="row-bad"{% endif %}>
+          <td class="small">{{ h.at|date:"j M H:i:s" }}</td>
+          <td>{{ h.status }}</td>
+          <td>{{ h.fps_actual|floatformat:1|default:"-" }}</td>
+          <td>{{ h.faces_seen }}</td><td>{{ h.faces_gated }}</td>
+          <td>{{ h.faces_identified }}</td><td>{{ h.reconnects }}</td>
+          <td class="small muted">{{ h.error_message|truncatechars:50 }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="muted">
+          No health samples. Either the camera is disabled, or no vision worker
+          is running &mdash; a camera with no samples shows as a coverage gap.
+        </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p><a href="{% url 'cameras:list' %}">Back to cameras</a></p>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  var start = document.getElementById('live-start');
+  var stop = document.getElementById('live-stop');
+  var holder = document.getElementById('live-holder');
+  var img = document.getElementById('live-img');
+  var note = document.getElementById('live-note');
+  var frameTimer = null;
+  var watchTimer = null;
+  var token = document.querySelector('[name=csrfmiddlewaretoken]');
+
+  function watch() {
+    // Tells the worker somebody is looking. Without this it draws nothing.
+    fetch('{% url "cameras:watch" camera.code %}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': token ? token.value : '' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        note.textContent = d.has_frame ? '' : (d.detail || '');
+      })
+      .catch(function () { note.textContent = 'Live view is unavailable.'; });
+  }
+
+  function tick() {
+    // Cache-bust each fetch; the endpoint is no-store but proxies vary.
+    img.src = '{% url "cameras:preview" camera.code %}?t=' + Date.now();
+  }
+
+  function begin() {
+    holder.hidden = false;
+    start.hidden = true;
+    stop.hidden = false;
+    note.textContent = 'Waiting for the worker...';
+    watch();
+    tick();
+    frameTimer = setInterval(tick, 300);
+    watchTimer = setInterval(watch, 6000);
+  }
+
+  function end() {
+    clearInterval(frameTimer);
+    clearInterval(watchTimer);
+    // The watch signal lapses on its own, so the worker stops drawing.
+    img.removeAttribute('src');
+    holder.hidden = true;
+    stop.hidden = true;
+    start.hidden = false;
+  }
+
+  if (start) { start.addEventListener('click', begin); }
+  if (stop) { stop.addEventListener('click', end); }
+  // Stop polling while the tab is in the background.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden && frameTimer) { clearInterval(frameTimer); frameTimer = null; }
+    else if (!document.hidden && !holder.hidden && !frameTimer) {
+      frameTimer = setInterval(tick, 300);
+    }
+  });
+})();
+
+(function () {
+  var btn = document.getElementById('test-btn');
+  if (!btn) { return; }
+  var box = document.getElementById('test-result');
+
+  btn.addEventListener('click', function () {
+    btn.disabled = true;
+    btn.textContent = 'Testing, up to 12s...';
+    box.hidden = false;
+    box.className = 'banner';
+    box.textContent = 'Opening the stream and looking for faces...';
+
+    var token = document.querySelector('[name=csrfmiddlewaretoken]');
+    fetch('{% url "cameras:test" camera.code %}', {
+      method: 'POST',
+      headers: { 'X-CSRFToken': token ? token.value : '' }
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        box.className = 'banner ' + (data.ok ? (data.verdict === 'presence only' ? 'warn' : 'ok') : 'error');
+        var html = '<b>' + (data.summary || 'No result') + '</b>';
+        if (data.advice) { html += '<br>' + data.advice; }
+        box.innerHTML = html;
+        btn.disabled = false;
+        btn.textContent = 'Test connection';
+      })
+      .catch(function () {
+        box.className = 'banner error';
+        box.textContent = 'The test could not be run.';
+        btn.disabled = false;
+        btn.textContent = 'Test connection';
+      });
+  });
+})();
+</script>
+{% endblock %}

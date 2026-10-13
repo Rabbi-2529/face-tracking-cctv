@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{% if creating %}Add{% else %}Edit{% endif %} {{ spec.label|lower }}{% endblock %}
+{% block content %}
+<h1>{% if creating %}Add{% else %}Edit{% endif %} {{ spec.label|lower }}</h1>
+{% if spec.blurb %}<p class="muted">{{ spec.blurb }}</p>{% endif %}
+
+{{ form.non_field_errors }}
+
+<form method="post" enctype="multipart/form-data" class="card stacked">
+  {% csrf_token %}
+  {% for f in form %}
+    <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+      {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+  {% endfor %}
+  <div class="form-actions">
+    <button type="submit">Save</button>
+    <a href="{% url 'org:overview' %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{% if creating %}Add employee{% else %}Edit {{ employee.full_name }}{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if creating %}Add employee{% else %}Edit employee{% endif %}</h1>
+
+{% if creating %}
+<div class="banner">
+  Three steps set a person up: <b>1. this record</b> &rarr;
+  2. record their consent &rarr; 3. enrol their face images.
+  You will be taken through them in order.
+</div>
+{% endif %}
+
+{{ form.non_field_errors }}
+
+<form method="post" class="card stacked">
+  {% csrf_token %}
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'employee_code' or f.name == 'full_name' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'department' or f.name == 'designation' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'date_of_joining' or f.name == 'status' %}
+      <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <label>{{ form.home_zone.label }}{{ form.home_zone }}
+    <span class="muted small">{{ form.home_zone.help_text }}</span>{{ form.home_zone.errors }}</label>
+  <label class="check">{{ form.is_trackable }} Trackable
+    <span class="muted small">&mdash; {{ form.is_trackable.help_text }}</span></label>
+
+  <div class="form-actions">
+    <button type="submit">{% if creating %}Add and continue{% else %}Save{% endif %}</button>
+    <a href="{% if employee %}{% url 'employees:setup' employee.uuid %}{% else %}{% url 'tracking:employee_list' %}{% endif %}">Cancel</a>
+  </div>
+</form>
+{% endblock %}

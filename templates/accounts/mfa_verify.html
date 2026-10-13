@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Verify sign-in{% endblock %}
+{% block content %}
+<div class="centered card">
+  <h1>Verify it's you</h1>
+  <p>Enter the six-digit code from your authenticator app. If you don't have
+     your phone, use one of your backup codes instead.</p>
+  <form method="post" class="stacked">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <label>Code
+      <input name="token" autocomplete="one-time-code" inputmode="numeric"
+             maxlength="16" required autofocus>
+    </label>
+    <button type="submit">Verify</button>
+  </form>
+  <p class="muted small">Lost both your phone and your backup codes? An administrator
+     can reset your authenticator so you can enrol a new one.</p>
+  <form method="post" action="{% url 'accounts:logout' %}" class="inline">
+    {% csrf_token %}<button type="submit" class="linkish small">Sign out instead</button>
+  </form>
+</div>
+{% endblock %}

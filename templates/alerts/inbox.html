@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Alerts{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Alerts</h1>
+    <p class="muted"><span id="ws-state">connecting...</span> &middot; zones you monitor only.
+      Probable matches never raise an alert on their own.</p>
+  </div>
+  <div class="head-actions">
+    {% if can_manage_rules %}<a href="{% url 'alerts:rules' %}">Alert rules</a>{% endif %}
+  </div>
+</div>
+
+<div id="new-alerts" class="banner warn" hidden>
+  <b id="new-count">0</b> new alert(s) since this page loaded. <a href="">Reload</a> to see them.
+</div>
+
+<form method="get" class="inline-form">
+  <label>Show
+    <select name="status" onchange="this.form.submit()">
+      <option value="active" {% if status == 'active' %}selected{% endif %}>Open and acknowledged</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+      <option value="all" {% if status == 'all' %}selected{% endif %}>All</option>
+    </select>
+  </label>
+</form>
+
+{% for a in alerts %}
+<section class="card alert-card sev-{{ a.severity }} st-{{ a.status }}">
+  <header class="request-head">
+    <span class="sev-chip">{{ a.get_severity_display }}</span>
+    <b>{{ a.message }}</b>
+    <span class="status-chip">{{ a.get_status_display }}</span>
+  </header>
+  <dl class="kv">
+    <dt>When</dt><dd>{{ a.triggered_at|date:"j M H:i:s" }}{% if a.occurrences > 1 %}
+      &middot; {{ a.occurrences }} times, last {{ a.last_seen_at|date:"H:i:s" }}{% endif %}</dd>
+    <dt>Rule</dt><dd>{{ a.rule.name|default:a.get_rule_type_display }}</dd>
+    {% if a.employee %}
+      <dt>Who</dt>
+      <dd>{% if show_identity %}<a href="{% url 'tracking:employee_timeline' a.employee.uuid %}?date={{ a.triggered_at|date:'Y-m-d' }}">{{ a.employee.full_name }}</a>
+            <span class="muted small">{{ a.employee.employee_code }}</span>
+          {% else %}<span class="muted">an identified person (names are shown to administrators)</span>{% endif %}</dd>
+    {% elif a.unknown_cluster_id %}
+      <dt>Who</dt><dd>an unknown face{% if show_identity %} &middot; <a href="{% url 'tracking:unknown_faces' %}">review unknown faces</a>{% endif %}</dd>
+    {% endif %}
+    {% if a.note %}<dt>Notes</dt><dd class="small">{{ a.note|linebreaksbr }}</dd>{% endif %}
+    {% if a.acknowledged_by %}<dt>Acknowledged</dt><dd class="small">{{ a.acknowledged_by.email }}, {{ a.acknowledged_at|date:"j M H:i" }}</dd>{% endif %}
+    {% if a.resolved_by %}<dt>Resolved</dt><dd class="small">{{ a.resolved_by.email }}, {{ a.resolved_at|date:"j M H:i" }}</dd>{% endif %}
+  </dl>
+  {% if can_view_snapshots and a.evidence_snapshot_key %}
+    <button type="button" class="linkish" data-reveal="{% url 'alerts:snapshot' a.uuid %}">Show evidence</button>
+    <img class="evidence" alt="Evidence for this alert" hidden>
+  {% endif %}
+  {% if a.status != 'resolved' %}
+    <form method="post" action="{% url 'alerts:action' a.uuid %}" class="decide">
+      {% csrf_token %}
+      <input name="note" placeholder="Note (required to resolve)">
+      {% if a.status == 'open' %}<button name="action" value="acknowledge">Acknowledge</button>{% endif %}
+      <button name="action" value="resolve" class="ok-btn">Resolve</button>
+    </form>
+  {% endif %}
+</section>
+{% empty %}
+<p class="muted">No alerts.</p>
+{% endfor %}
+
+{% if page_obj.has_other_pages %}
+<nav class="pager">
+  {% if page_obj.has_previous %}<a href="?status={{ status }}&page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+  <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+  {% if page_obj.has_next %}<a href="?status={{ status }}&page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  // Evidence loads only when asked for: each image is an audited fetch.
+  document.querySelectorAll('[data-reveal]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var img = button.parentElement.querySelector('img.evidence');
+      if (!img.src) { img.src = button.dataset.reveal; }
+      img.hidden = !img.hidden;
+      button.textContent = img.hidden ? 'Show evidence' : 'Hide evidence';
+    });
+  });
+
+  var state = document.getElementById('ws-state');
+  var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  var socket = new WebSocket(proto + '://' + location.host + '/ws/alerts/');
+  var fresh = 0;
+  socket.onopen = function () { state.textContent = 'live'; };
+  socket.onclose = function () { state.textContent = 'disconnected, reload to reconnect'; };
+  socket.onmessage = function (event) {
+    var msg = JSON.parse(event.data);
+    if (msg.type !== 'alert') { return; }
+    fresh += 1;
+    document.getElementById('new-count').textContent = fresh;
+    document.getElementById('new-alerts').hidden = false;
+    document.title = '(' + fresh + ') Alerts';
+  };
+})();
+</script>
+{% endblock %}

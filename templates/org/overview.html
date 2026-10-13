@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Site structure{% endblock %}
+{% block content %}
+<h1>Site structure</h1>
+<p class="muted">Buildings, floors, zones, the movement topology, and departments.</p>
+
+{% if orphan_zones %}
+<div class="banner warn" id="gaps">
+  <b>{{ orphan_zones|length }} zone(s) have no connections.</b>
+  Movement into or out of them will be flagged as physically impossible,
+  because the graph says there is no way to walk there:
+  {% for z in orphan_zones %}<code>{{ z.code }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
+  {% if can_manage %}<a href="{% url 'org:create' 'adjacency' %}">Add a connection</a>.{% endif %}
+</div>
+{% endif %}
+
+{% if pending_review %}
+<div class="banner warn">
+  {{ pending_review }} movement(s) are awaiting review as implausible.
+  A missing door in the graph is the usual cause.
+  <a href="{% url 'tracking:movement_review' %}">Review them</a>.
+</div>
+{% endif %}
+
+{% if zones_without_cameras %}
+<div class="banner">
+  {{ zones_without_cameras|length }} trackable zone(s) have no camera, so nobody
+  is ever seen there:
+  {% for z in zones_without_cameras %}<code>{{ z.code }}</code>{% if not forloop.last %}, {% endif %}{% endfor %}.
+</div>
+{% endif %}
+
+<section class="card" id="zone">
+  <div class="page-head">
+    <h2>Zones</h2>
+    {% if can_manage %}<a class="button" href="{% url 'org:create' 'zone' %}">Add zone</a>{% endif %}
+  </div>
+  <table class="grid">
+    <thead><tr><th>Zone</th><th>Floor</th><th>Type</th><th>Cameras</th>
+               <th>Connections</th><th>Policy</th><th></th></tr></thead>
+    <tbody>
+      {% for z in zones %}
+        <tr {% if z.tracking_prohibited %}class="muted"{% endif %}>
+          <td>{{ z.name }}<div class="muted small"><code>{{ z.code }}</code></div></td>
+          <td>{{ z.floor.name }}<div class="muted small">{{ z.floor.building.name }}</div></td>
+          <td>{{ z.get_zone_type_display }}</td>
+          <td>{% if z.camera_count %}{{ z.camera_count }}{% else %}<span class="warnc">none</span>{% endif %}</td>
+          <td>{% if z.edge_count %}{{ z.edge_count }}{% elif not z.tracking_prohibited %}<span class="bad">none</span>{% else %}&mdash;{% endif %}</td>
+          <td class="small">
+            {% if z.tracking_prohibited %}<b class="bad">never tracked</b>
+            {% elif z.is_restricted %}<span class="warnc">restricted</span>
+            {% else %}<span class="muted">normal</span>{% endif %}
+          </td>
+          <td>{% if can_manage %}<a href="{% url 'org:edit' 'zone' z.code %}">Edit</a>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card" id="adjacency">
+  <div class="page-head">
+    <h2>Movement topology</h2>
+    {% if can_manage %}<a class="button" href="{% url 'org:create' 'adjacency' %}">Add connection</a>{% endif %}
+  </div>
+  <p class="muted small">
+    Every real door should be a connection here. This graph is what separates a
+    genuine movement from a mis-identification: a transition no connection
+    permits is flagged rather than published as fact.
+  </p>
+  <table class="grid">
+    <thead><tr><th>From</th><th>To</th><th>Both ways</th><th>Minimum</th><th>Typical</th><th></th></tr></thead>
+    <tbody>
+      {% for a in adjacencies %}
+        <tr>
+          <td>{{ a.from_zone.name }}</td>
+          <td>{{ a.to_zone.name }}</td>
+          <td>{% if a.bidirectional %}yes{% else %}one way{% endif %}</td>
+          <td>{{ a.min_transit_seconds }} s</td>
+          <td>{{ a.typical_transit_seconds }} s</td>
+          <td class="small">
+            {% if can_manage %}
+              <a href="{% url 'org:edit' 'adjacency' a.pk %}">Edit</a> &middot;
+              <form method="post" action="{% url 'org:adjacency_delete' a.pk %}" class="inline">
+                {% csrf_token %}<button type="submit" class="linkish">Remove</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="bad">
+          No connections defined. Every movement will be flagged implausible
+          until the graph is built.
+        </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="two-col">
+  <section class="card" id="building">
+    <div class="page-head">
+      <h2>Buildings and floors</h2>
+      {% if can_manage %}<a class="button" href="{% url 'org:create' 'building' %}">Add building</a>{% endif %}
+    </div>
+    <table class="grid">
+      <thead><tr><th>Building</th><th>Floors</th><th></th></tr></thead>
+      <tbody>
+        {% for b in buildings %}
+          <tr><td>{{ b.name }}<div class="muted small">{{ b.timezone }}</div></td>
+              <td>{{ b.floor_count }}</td>
+              <td>{% if can_manage %}<a href="{% url 'org:edit' 'building' b.pk %}">Edit</a>{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% if can_manage %}
+      <p class="small"><a href="{% url 'org:create' 'floor' %}">Add a floor</a></p>
+    {% endif %}
+    <table class="grid">
+      <thead><tr><th>Floor</th><th>Level</th><th></th></tr></thead>
+      <tbody>
+        {% for f in floors %}
+          <tr><td>{{ f.building.name }} / {{ f.name }}
+                <div class="muted small">{% if f.plan_image %}plan uploaded{% else %}no plan{% endif %}</div></td>
+              <td>{{ f.level }}</td>
+              <td>{% if can_manage %}<a href="{% url 'org:edit' 'floor' f.pk %}">Edit</a>
+                  {% if f.plan_image %} &middot; <a href="{% url 'org:floor_plan' f.pk %}">Draw zones</a>{% endif %}{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="department">
+    <div class="page-head">
+      <h2>Departments</h2>
+      {% if can_manage %}<a class="button" href="{% url 'org:create' 'department' %}">Add</a>{% endif %}
+    </div>
+    <p class="muted small">
+      Departments scope HR access: an HR user sees only the departments
+      assigned to them.
+    </p>
+    <table class="grid">
+      <thead><tr><th>Department</th><th>Code</th><th>People</th><th></th></tr></thead>
+      <tbody>
+        {% for d in departments %}
+          <tr><td>{{ d.name }}</td><td><code>{{ d.code }}</code></td>
+              <td>{{ d.employee_count }}</td>
+              <td>{% if can_manage %}<a href="{% url 'org:edit' 'department' d.pk %}">Edit</a>{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    <h2 id="designation">Job titles</h2>
+    {% if can_manage %}<p class="small"><a href="{% url 'org:create' 'designation' %}">Add a job title</a></p>{% endif %}
+    <table class="grid">
+      <tbody>
+        {% for d in designations %}
+          <tr><td>{{ d.title }}</td><td class="muted small">level {{ d.level }}</td>
+              <td>{% if can_manage %}<a href="{% url 'org:edit' 'designation' d.pk %}">Edit</a>{% endif %}</td></tr>
+        {% empty %}
+          <tr><td class="muted">None defined.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

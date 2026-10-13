@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Corrections{% endblock %}
+{% block content %}
+<h1>Review</h1>
+{% include "tracking/_review_tabs.html" %}
+<p class="muted">
+  "That was not me" reports. Each is a rectification request the person is
+  entitled to have answered, and each accepted one is labelled evidence of
+  where matching goes wrong. Check the entry's evidence on the timeline
+  first. Accepting marks the entry as not this person; nothing is deleted.
+</p>
+
+{% for c in corrections %}
+<section class="card request status-pending">
+  <header>
+    <b>{{ c.was_employee.full_name|default:"(employee removed)" }}</b>
+    <span class="muted">{{ c.was_employee.employee_code }}</span>
+    <span class="status-chip">reported {{ c.created_at|date:"j M H:i" }}</span>
+  </header>
+  <dl class="kv">
+    <dt>Reported by</dt><dd>{{ c.reported_by.email|default:"unknown" }}</dd>
+    <dt>Entry</dt>
+    <dd>{% if c.presence_interval %}
+          {{ c.presence_interval.zone.name }}, {{ c.presence_interval.entered_at|date:"j M H:i" }}
+          ({{ c.presence_interval.get_confidence_display|lower }})
+        {% else %}not specified{% endif %}
+        {% if c.was_employee %}
+          &middot; <a href="{% url 'tracking:employee_timeline' c.was_employee.uuid %}{% if c.presence_interval %}?date={{ c.presence_interval.entered_at|date:'Y-m-d' }}{% endif %}">open timeline</a>
+        {% endif %}</dd>
+    <dt>What is wrong</dt><dd>{{ c.reason }}</dd>
+  </dl>
+  <form method="post" action="{% url 'tracking:correction_decide' c.pk %}" class="decide">
+    {% csrf_token %}
+    <input name="note" placeholder="Note to the reporter (required to reject)">
+    <button name="decision" value="accept" class="ok-btn">Accept</button>
+    <button name="decision" value="reject" class="bad-btn">Reject</button>
+  </form>
+</section>
+{% empty %}
+<p class="muted">No open corrections.</p>
+{% endfor %}
+
+{% if recent %}
+<section class="card">
+  <h2>Recently resolved</h2>
+  <table class="grid">
+    <thead><tr><th>Resolved</th><th>Employee</th><th>Outcome</th><th>By</th><th>Note</th></tr></thead>
+    <tbody>
+      {% for c in recent %}
+        <tr>
+          <td class="small">{{ c.resolved_at|date:"j M H:i" }}</td>
+          <td>{{ c.was_employee.employee_code }}</td>
+          <td class="small {% if c.status == 'accepted' %}ok{% endif %}">{{ c.get_status_display }}</td>
+          <td class="small">{{ c.resolved_by.email }}</td>
+          <td class="small muted">{{ c.resolution_note|truncatechars:80 }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}{% if creating %}Add user{% else %}Edit {{ target.email }}{% endif %}{% endblock %}
+{% block content %}
+<h1>{% if creating %}Add user{% else %}Edit user{% endif %}</h1>
+{% if target %}<p class="muted">{{ target.email }}</p>{% endif %}
+
+{% if creating %}
+<div class="banner">
+  A temporary password is generated and shown once after saving. The user must
+  change it at first sign-in, so no administrator ever knows their standing
+  password.
+</div>
+{% endif %}
+
+{{ form.non_field_errors }}
+
+<form method="post" class="card stacked">
+  {% csrf_token %}
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'email' or f.name == 'full_name' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+  <div class="field-row">
+    {% for f in form %}{% if f.name == 'role' or f.name == 'employee' %}
+      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
+        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
+    {% endif %}{% endfor %}
+  </div>
+
+  <details class="card-inset">
+    <summary>What each role grants</summary>
+    <table class="grid">
+      <tbody>
+        {% for r in roles %}
+          <tr><td><b>{{ r.label }}</b></td><td class="small">{{ r.can|join:", " }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+
+  <h2>Access scope</h2>
+  <div class="banner warn">
+    <b>An empty scope means nothing, not everything.</b> A scoped role with no
+    departments or zones assigned will see no data at all. This is the most
+    common misconfiguration in this system.
+  </div>
+  <div class="two-col">
+    <label>{{ form.departments.label }}
+      <span class="muted small">{{ form.departments.help_text }}</span>
+      <div class="checkbox-list">{{ form.departments }}</div>
+      {{ form.departments.errors }}</label>
+    <label>{{ form.zones.label }}
+      <span class="muted small">{{ form.zones.help_text }}</span>
+      <div class="checkbox-list">{{ form.zones }}</div>
+      {{ form.zones.errors }}</label>
+  </div>
+
+  <label class="check">{{ form.is_active }} Active &mdash; unchecking revokes all access</label>
+
+  <div class="form-actions">
+    <button type="submit">Save user</button>
+    <a href="{% url 'useradmin:list' %}">Cancel</a>
+  </div>
+</form>
+
+{% if target %}
+<section class="card">
+  <h2>Authenticator</h2>
+  {% if target.has_confirmed_mfa %}
+    <p>Enrolled. If this person has lost both their phone and their backup codes,
+       reset it: their authenticator and backup codes are removed, and they must
+       enrol a new one at next sign-in.</p>
+    {% if target.pk != user.pk %}
+      <form method="post" action="{% url 'useradmin:mfa_reset' target.uuid %}" class="decide">
+        {% csrf_token %}
+        <input name="reason" placeholder="Why (e.g. phone lost, identity checked in person)" required minlength="10">
+        <button type="submit" class="bad-btn">Reset authenticator</button>
+      </form>
+    {% else %}
+      <p class="muted small">You cannot reset your own authenticator; ask another Super Admin.</p>
+    {% endif %}
+  {% else %}
+    <p class="muted">Not enrolled.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if recent_logins %}
+<section class="card">
+  <h2>Recent sign-ins</h2>
+  <table class="grid">
+    <thead><tr><th>When</th><th>Result</th><th>Address</th></tr></thead>
+    <tbody>
+      {% for l in recent_logins %}
+        <tr><td>{{ l.at|date:"j M Y H:i" }}</td>
+            <td>{% if l.succeeded %}<span class="ok">ok</span>{% else %}<span class="bad">failed</span>{% endif %}</td>
+            <td class="small">{{ l.ip_address|default:"-" }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block content %}
+<div class="centered card">
+  <h1>CCTV Tracking</h1>
+  <p class="muted">Authorised personnel only. Sign-in attempts are recorded.</p>
+  {% if form.errors %}<div class="banner error">Invalid email or password.</div>{% endif %}
+  <form method="post" class="stacked">
+    {% csrf_token %}
+    <label>Email
+      <input type="email" name="username" required autofocus autocomplete="username">
+    </label>
+    <label>Password
+      <input type="password" name="password" required autocomplete="current-password">
+    </label>
+    <button type="submit">Sign in</button>
+    <input type="hidden" name="next" value="{{ next }}">
+  </form>
+</div>
+{% endblock %}

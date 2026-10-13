@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Not permitted{% endblock %}
+{% block content %}
+<h1>Not permitted</h1>
+<div class="banner error">{{ exception|default:"You do not have access to this." }}</div>
+<p>
+  If you need this access for a specific person, raise a
+  {% if 'trackrequest.create' in granted_actions %}
+    <a href="{% url 'watchlist:create' %}">tracking request</a>
+  {% else %}
+    tracking request through your administrator
+  {% endif %}
+  with a written reason. This attempt has been logged.
+</p>
+<p><a href="{% url 'tracking:dashboard' %}">Back to dashboard</a></p>
+{% endblock %}

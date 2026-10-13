@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}Enrol {{ employee.full_name }}{% endblock %}
+{% block content %}
+<h1>Face enrolment</h1>
+<p class="muted">
+  {{ employee.full_name }} &middot; {{ employee.employee_code }} &middot;
+  {{ employee.department.name|default:"no department" }}
+</p>
+
+<div class="tiles">
+  <div class="tile {% if coverage.active_count < recommended %}warn-tile{% endif %}">
+    <span class="n">{{ coverage.active_count }}/{{ coverage.recommended }}</span>
+    <span class="l">images in the gallery</span>
+  </div>
+  <div class="tile">
+    <span class="n">{{ coverage.mean_quality }}</span>
+    <span class="l">mean quality (0&ndash;1)</span>
+  </div>
+  <div class="tile {% if not coverage.has_consent %}bad-tile{% endif %}">
+    <span class="n">{% if coverage.has_consent %}yes{% else %}no{% endif %}</span>
+    <span class="l">active consent on file</span>
+  </div>
+  <div class="tile {% if not coverage.is_processable %}warn-tile{% endif %}">
+    <span class="n">{% if coverage.is_processable %}yes{% else %}no{% endif %}</span>
+    <span class="l">matchable by the pipeline</span>
+  </div>
+  {% if coverage.flagged_count %}
+  <div class="tile bad-tile">
+    <span class="n">{{ coverage.flagged_count }}</span>
+    <span class="l">flagged as matching someone else</span>
+  </div>
+  {% endif %}
+</div>
+
+{% if not coverage.has_consent %}
+<div class="banner error">
+  <b>No active consent record.</b> You can enrol images, but this person will
+  not be matched until consent exists.
+  <a href="{% url 'employees:consent' employee.uuid %}">Record it now</a>.
+</div>
+{% endif %}
+
+{% if coverage.advice %}
+<div class="banner warn">
+  <b>To improve recognition for this person:</b>
+  <ul class="tight">
+    {% for item in coverage.advice %}<li>{{ item }}</li>{% endfor %}
+  </ul>
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>Add images</h2>
+  <form method="post" enctype="multipart/form-data" class="stacked">
+    {% csrf_token %}
+    <label>
+      {{ form.images.label }}
+      {{ form.images }}
+      <span class="muted small">{{ form.images.help_text }}</span>
+    </label>
+    <button type="submit">Upload and check</button>
+  </form>
+  <p class="muted small">
+    Each image is checked before it is stored: face size, focus, exposure and
+    head angle. Images that fail are rejected with a reason rather than saved,
+    because a poor gallery image degrades every future match for this person.
+  </p>
+</section>
+
+<section class="card">
+  <h2>Gallery</h2>
+  {% if coverage.by_pose %}
+    <p class="muted small">
+      Pose coverage:
+      {% for pose, count in coverage.by_pose.items %}
+        {{ pose }} &times;{{ count }}{% if not forloop.last %} &middot; {% endif %}
+      {% endfor %}
+    </p>
+  {% endif %}
+
+  <table class="grid">
+    <thead>
+      <tr><th>Image</th><th>Pose</th><th>Quality</th><th>Face px</th>
+          <th>Yaw / pitch</th><th>Model</th><th>State</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for e in enrollments %}
+        <tr {% if e.conflict_flagged %}class="row-bad"{% elif not e.is_active %}class="muted"{% endif %}>
+          <td class="small">{{ e.created_at|date:"j M Y H:i" }}</td>
+          <td>{{ e.get_pose_display }}</td>
+          <td>{{ e.quality_score|floatformat:2 }}</td>
+          <td>{{ e.face_width_px }}</td>
+          <td class="small">{{ e.yaw_degrees|floatformat:0 }} / {{ e.pitch_degrees|floatformat:0 }}</td>
+          <td class="small"><code>{{ e.model_version }}</code></td>
+          <td>
+            {% if e.conflict_flagged %}
+              <b class="bad">conflict</b>
+            {% elif e.is_active %}
+              <span class="ok">in use</span>
+            {% else %}
+              <span class="muted">not in use</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if e.conflict_flagged %}
+              <details>
+                <summary class="bad">Resolve</summary>
+                <p class="small">
+                  This face matches
+                  <b>{{ e.conflict_with.full_name }}</b>
+                  ({{ e.conflict_with.employee_code }}). Accept it only if
+                  these really are two different people who look alike, such
+                  as identical twins.
+                </p>
+                <form method="post"
+                      action="{% url 'employees:enroll_conflict' employee.uuid e.uuid %}"
+                      class="decide">
+                  {% csrf_token %}
+                  <input name="note" placeholder="Why (required to accept)">
+                  <button name="resolution" value="accept" class="bad-btn">Accept anyway</button>
+                  <button name="resolution" value="reject" class="ok-btn">Reject image</button>
+                </form>
+              </details>
+            {% elif e.is_active %}
+              <form method="post"
+                    action="{% url 'employees:enroll_deactivate' employee.uuid e.uuid %}"
+                    class="inline">
+                {% csrf_token %}
+                <button type="submit" class="linkish">Remove</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="8" class="muted">
+          No images enrolled yet. This person cannot be recognised until some
+          are added.
+        </td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<p>
+  <a href="{% url 'employees:setup' employee.uuid %}">Back to setup</a>
+  &middot;
+  <a href="{% url 'tracking:employee_timeline' employee.uuid %}">View timeline</a>
+</p>
+{% endblock %}
