@@ -5,7 +5,7 @@
   <div>
     <h1>{{ camera.name }}</h1>
     <p class="muted">
-      <code>{{ camera.code }}</code> &middot; {{ camera.get_vendor_display }} &middot;
+      <code>{{ camera.code }}</code> &middot; {{ camera.vendor.name|default:"-" }} &middot;
       {{ camera.zone.name }} ({{ camera.zone.floor.name }})
     </p>
   </div>

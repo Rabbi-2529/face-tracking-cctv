@@ -30,6 +30,93 @@ class CameraGroup(TimeStampedModel):
         return self.name
 
 
+class CameraVendor(TimeStampedModel):
+    """A camera make, and how its stream address is formed.
+
+    A managed list rather than fixed choices, because estates mix brands and
+    firmware changes stream paths. Each vendor says how the camera form
+    should build the address:
+
+    * ``template`` - from host, credentials and channel, using
+      ``stream_template``;
+    * ``raw`` - no standard path, so the full URL is pasted;
+    * ``file`` - a video file path, for testing.
+    """
+
+    class Connection(models.TextChoices):
+        TEMPLATE = "template", "Build the URL from a template"
+        RAW = "raw", "Paste the full stream URL"
+        FILE = "file", "Video file path (testing)"
+
+    # Well-known codes other code refers to.
+    DAHUA = "dahua"
+    FILE = "file"
+
+    # Placeholders a template may use; anything else is rejected on save.
+    PLACEHOLDERS = (
+        "credentials", "host", "port", "channel", "stream", "hik_channel", "width", "height",
+    )
+
+    name = models.CharField(max_length=60, unique=True)
+    code = models.SlugField(max_length=30, unique=True)
+    connection = models.CharField(
+        max_length=10, choices=Connection.choices, default=Connection.TEMPLATE
+    )
+    stream_template = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="e.g. rtsp://{credentials}{host}:{port}/cam/realmonitor?channel={channel}&subtype={stream}",
+    )
+    default_port = models.PositiveIntegerField(default=554)
+    setup_notes = models.TextField(
+        blank=True, help_text="Shown on the camera form when this vendor is chosen."
+    )
+    is_active = models.BooleanField(
+        default=True, help_text="Inactive vendors are not offered for new cameras."
+    )
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.connection != self.Connection.TEMPLATE:
+            return
+        template = (self.stream_template or "").strip()
+        if not template:
+            raise ValidationError({"stream_template": "A template vendor needs a stream template."})
+        if not template.startswith(("rtsp://", "rtsps://")):
+            raise ValidationError({"stream_template": "The template must start with rtsp:// or rtsps://."})
+        if "{host}" not in template:
+            raise ValidationError({"stream_template": "The template must contain {host}."})
+        try:
+            self.example_url(template)
+        except (KeyError, IndexError, ValueError) as exc:
+            raise ValidationError(
+                {
+                    "stream_template": f"Unknown or malformed placeholder ({exc}). Allowed: "
+                    + ", ".join("{" + p + "}" for p in self.PLACEHOLDERS)
+                }
+            ) from None
+
+    def example_url(self, template: str | None = None) -> str:
+        """The template filled with sample values, for previews and validation."""
+        return (template or self.stream_template).format(
+            credentials="user:****@",
+            host="192.168.1.64",
+            port=self.default_port or 554,
+            channel=1,
+            stream=0,
+            hik_channel="101",
+            width=1920,
+            height=1080,
+        )
+
+
 class Camera(SoftDeleteModel, TimeStampedModel):
     """One video source.
 
@@ -39,14 +126,6 @@ class Camera(SoftDeleteModel, TimeStampedModel):
     a ceiling dome and expecting names out of it is the single most common
     way these projects fail - record the honest purpose here.
     """
-
-    class Vendor(models.TextChoices):
-        DAHUA = "dahua", "Dahua"
-        HIKVISION = "hikvision", "Hikvision"
-        AXIS = "axis", "Axis"
-        CP_PLUS = "cpplus", "CP Plus"
-        ONVIF = "onvif", "Generic ONVIF"
-        FILE = "file", "Video file (testing)"
 
     class Purpose(models.TextChoices):
         IDENTITY = "identity", "Identity (doorway, face-height)"
@@ -68,8 +147,13 @@ class Camera(SoftDeleteModel, TimeStampedModel):
         CameraGroup, null=True, blank=True, on_delete=models.SET_NULL, related_name="cameras"
     )
 
-    vendor = models.CharField(
-        max_length=16, choices=Vendor.choices, default=Vendor.DAHUA
+    vendor = models.ForeignKey(
+        CameraVendor,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="cameras",
+        help_text="Managed under Cameras > Vendors.",
     )
     purpose = models.CharField(
         max_length=10, choices=Purpose.choices, default=Purpose.PRESENCE

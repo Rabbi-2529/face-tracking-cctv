@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Camera vendors{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Camera vendors</h1>
+    <p class="muted">Camera makes, and how each one's stream address is formed. Offered on the Add camera form.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button ghost" href="{% url 'cameras:list' %}">Cameras</a>
+    <a class="button" href="{% url 'cameras:vendor_create' %}">Add vendor</a>
+  </div>
+</div>
+
+<section class="card">
+  <table class="grid">
+    <thead><tr><th>Vendor</th><th>Code</th><th>Stream address</th><th>Port</th><th>Cameras</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      {% for v in vendors %}
+        <tr>
+          <td><b>{{ v.name }}</b></td>
+          <td><code>{{ v.code }}</code></td>
+          <td class="small">{% if v.connection == "template" %}<code class="wrap">{{ v.stream_template }}</code>{% else %}{{ v.get_connection_display }}{% endif %}</td>
+          <td>{{ v.default_port }}</td>
+          <td>{{ v.camera_count }}</td>
+          <td>{% if v.is_active %}<span class="chk chk-pass">ACTIVE</span>{% else %}<span class="chk chk-warn">INACTIVE</span>{% endif %}</td>
+          <td class="row-actions">
+            <a class="button ghost" href="{% url 'cameras:vendor_edit' v.pk %}">Edit</a>
+            {% if not v.camera_count %}
+              <form method="post" action="{% url 'cameras:vendor_delete' v.pk %}" class="inline" onsubmit="return confirm('Delete {{ v.name|escapejs }}?');">
+                {% csrf_token %}<button type="submit" class="bad-btn">Delete</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted">No vendors yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

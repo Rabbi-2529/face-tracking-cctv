@@ -240,3 +240,33 @@ def test_login_page_has_no_shell(client):
     html = client.get(reverse("accounts:login")).content.decode()
     assert 'class="sidebar"' not in html
     assert "public" in html
+
+
+# ---------------------------------------------------------------- readiness
+
+
+def test_readiness_fails_without_an_identity_camera(db, org, employees):
+    from apps.tracking.pilot import FAIL, pilot_readiness
+
+    result = pilot_readiness()
+    assert not result["ready"]
+    names = {c.name: c.status for c in result["checks"]}
+    assert names["Identity cameras"] == FAIL
+
+
+def test_readiness_flags_thin_enrolment_and_small_faces(db, org, employees, camera):
+    from apps.tracking.pilot import FAIL, WARN, pilot_readiness
+
+    camera.measured_face_width_px = 42
+    camera.save()
+    checks = {c.name: c for c in pilot_readiness()["checks"]}
+    assert checks["Identity cameras see faces of 60px or more"].status == FAIL
+    assert "42px" in checks["Identity cameras see faces of 60px or more"].detail
+    assert checks["At least 5 enrolment images each"].status == WARN
+
+
+def test_readiness_is_on_the_accuracy_page(client, users, camera):
+    client.force_login(users["developer"])
+    response = client.get(reverse("tracking:accuracy"))
+    assert response.context["readiness"]["checks"]
+    assert "Pilot readiness" in response.content.decode()

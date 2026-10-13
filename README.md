@@ -364,13 +364,14 @@ download those files into `static/vendor/` and point `base.html` at them.
 
 ## Phase 6 - pilot and tuning
 
-Follow **[docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md)**: one floor, four
+Follow **[docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md)** and record results in **[docs/PILOT_LOG.md](docs/PILOT_LOG.md)**: one floor, four
 weeks, a go / no-go decision on measured numbers. The tools it uses:
 
 | Tool | What it answers |
 |---|---|
 | `/accuracy/` (Developer, Admin) | Per camera: gate rate, probable share, capability. Per zone: accepted wrong IDs, implausible arrivals. A **threshold what-if** over real match scores, next to the highest score of any identification reviewers confirmed was wrong. |
 | `make benchmark data=/samples/benchmark` | Accuracy against a labelled photo set from your own cameras: TAR/FAR, recommended thresholds, and pass/fail against the plan's targets (>= 95% correct, <= 2% confirmed-wrong). |
+| `make pilot-check` (also on `/accuracy/`) | The runbook's "before day 1" list checked against live data: site, cameras, people, governance, tuning. |
 | `make loadtest cams=20 fps=4 secs=60` | Whether the aggregator keeps up at the rollout camera count. Synthetic unknown-face events only; cleaned up afterwards. |
 
 Turn on `MFA_ENFORCED=1` once every privileged user has enrolled.

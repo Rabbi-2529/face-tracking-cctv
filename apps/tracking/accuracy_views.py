@@ -236,8 +236,11 @@ class AccuracyView(ActionRequiredMixin, TemplateView):
         current = what_if(since, config.match_threshold_high, config.match_threshold_low)
         proposed = what_if(since, high, low) if valid else None
 
+        from apps.tracking.pilot import pilot_readiness
+
         ctx.update(
             {
+                "readiness": pilot_readiness(),
                 "days": days,
                 "config": config,
                 "high": high,

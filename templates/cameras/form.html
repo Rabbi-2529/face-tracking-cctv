@@ -1,128 +1,203 @@
 {% extends "base.html" %}
 {% block title %}{% if camera %}Edit {{ camera.code }}{% else %}Add camera{% endif %}{% endblock %}
 {% block content %}
-<h1>{% if camera %}Edit camera{% else %}Add camera{% endif %}</h1>
-{% if camera %}<p class="muted"><code>{{ camera.code }}</code> in {{ camera.zone.name }}</p>{% endif %}
-
-{% for w in warnings %}<div class="banner warn">{{ w }}</div>{% endfor %}
-{{ form.non_field_errors }}
-
-<form method="post" class="card stacked">
+<form method="post" class="cam-form" novalidate>
   {% csrf_token %}
 
-  <h2>Identity</h2>
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'name' or f.name == 'code' %}
-      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
-        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'zone' or f.name == 'group' %}
-      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
-        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
-  <p class="muted small">
-    Zones marked never-tracked are not listed here, so a camera cannot be
-    pointed at a toilet or changing room from this form.
-  </p>
-
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'vendor' or f.name == 'purpose' %}
-      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
-        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
-
-  <div class="banner" id="vendor-help">
-    {% for value, text in vendor_help.items %}
-      <span class="vendor-note" data-vendor="{{ value }}" hidden>{{ text|safe }}</span>
-    {% endfor %}
-  </div>
-
-  <h2>Stream address</h2>
-  <div class="radio-group">{{ form.connection_mode }}</div>
-  {{ form.connection_mode.errors }}
-
-  <div id="build-fields">
-    <div class="field-row">
-      {% for f in form %}{% if f.name == 'host' or f.name == 'rtsp_port' %}
-        <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-      {% endif %}{% endfor %}
+  <div class="page-head">
+    <div>
+      <h1>{% if camera %}Edit camera{% else %}Add camera{% endif %}</h1>
+      <p class="muted">{% if camera %}<code>{{ camera.code }}</code> in {{ camera.zone.name }}{% else %}Register a camera, build its stream address, and record where it is mounted.{% endif %}</p>
     </div>
-    <div class="field-row">
-      {% for f in form %}{% if f.name == 'username' or f.name == 'password' %}
-        <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-      {% endif %}{% endfor %}
-    </div>
-    <div class="field-row">
-      {% for f in form %}{% if f.name == 'channel' or f.name == 'stream' %}
-        <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-      {% endif %}{% endfor %}
+    <div class="head-actions">
+      <a class="button ghost" href="{% if camera %}{% url 'cameras:detail' camera.code %}{% else %}{% url 'cameras:list' %}{% endif %}">Cancel</a>
+      <button type="submit">Save camera</button>
     </div>
   </div>
 
-  <div id="raw-fields">
-    <label>{{ form.raw_url.label }}
-      {{ form.raw_url }}
-      <span class="muted small">{{ form.raw_url.help_text }}</span>
-      {{ form.raw_url.errors }}
-    </label>
-  </div>
+  {% for w in warnings %}<div class="banner warn">{{ w }}</div>{% endfor %}
+  {% if form.non_field_errors %}<div class="banner error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  {% if form.errors and not form.non_field_errors %}<div class="banner error">Some fields need attention - see the highlighted entries below.</div>{% endif %}
 
-  <p class="muted small">
-    The stream address is a working credential for a device on your network.
-    It is stored in an encrypted column and is never shown back on this page.
-  </p>
+  <div class="form-layout">
+    <div class="form-main">
 
-  <h2>Streaming</h2>
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'width' or f.name == 'height' or f.name == 'native_fps' or f.name == 'sample_fps' %}
-      <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
+      <section class="card form-section">
+        <div class="section-head"><span class="step">1</span><h2>Basics</h2></div>
+        <div class="form-grid">
+          {% include "partials/field.html" with f=form.name %}
+          {% include "partials/field.html" with f=form.code %}
+          {% include "partials/field.html" with f=form.zone %}
+          {% include "partials/field.html" with f=form.group %}
+        </div>
+        <div class="hint">Never-tracked zones are not offered, so a camera cannot be pointed at a washroom or changing room.</div>
+      </section>
 
-  <h2>Placement</h2>
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'mount_height_cm' or f.name == 'tilt_degrees' %}
-      <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
-  <label>{{ form.calibration_notes.label }}{{ form.calibration_notes }}</label>
-  <p class="muted small">
-    Identity cameras belong at a doorway, 180&ndash;220cm high, tilted under
-    15&ndash;20 degrees, facing people as they walk toward them. A ceiling dome
-    angled steeply down will not name anyone.
-  </p>
+      <section class="card form-section">
+        <div class="section-head"><span class="step">2</span><h2>Device and stream</h2>
+          <a class="section-link" href="{% url 'cameras:vendors' %}">Manage vendors</a></div>
+        <div class="form-grid">
+          {% include "partials/field.html" with f=form.vendor %}
+          {% include "partials/field.html" with f=form.purpose %}
+        </div>
 
-  <label class="check">{{ form.is_enabled }} Enabled &mdash; a worker will start ingesting this camera</label>
+        <div class="field">
+          <label>Stream address</label>
+          <div class="segmented" role="radiogroup">
+            {% for radio in form.connection_mode %}
+              <label class="seg-option">{{ radio.tag }}<span>{{ radio.choice_label }}</span></label>
+            {% endfor %}
+          </div>
+          {% for e in form.connection_mode.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+        </div>
 
-  <div class="form-actions">
-    <button type="submit">Save camera</button>
-    <a href="{% if camera %}{% url 'cameras:detail' camera.code %}{% else %}{% url 'cameras:list' %}{% endif %}">Cancel</a>
+        <div id="build-fields" class="form-grid cols-3">
+          {% include "partials/field.html" with f=form.host %}
+          {% include "partials/field.html" with f=form.rtsp_port %}
+          {% include "partials/field.html" with f=form.channel %}
+          {% include "partials/field.html" with f=form.username %}
+          {% include "partials/field.html" with f=form.password %}
+          {% include "partials/field.html" with f=form.stream %}
+        </div>
+
+        <div id="raw-fields" class="form-grid cols-1">
+          {% include "partials/field.html" with f=form.raw_url %}
+        </div>
+
+        <div class="url-preview" id="url-preview" hidden>
+          <span class="label">Address preview</span>
+          <code id="url-preview-text"></code>
+        </div>
+        <div class="hint">The address is a working credential for a device on your network. It is stored encrypted and never shown back here.</div>
+      </section>
+
+      <section class="card form-section">
+        <div class="section-head"><span class="step">3</span><h2>Video</h2></div>
+        <div class="form-grid cols-4">
+          {% include "partials/field.html" with f=form.width %}
+          {% include "partials/field.html" with f=form.height %}
+          {% include "partials/field.html" with f=form.native_fps %}
+          {% include "partials/field.html" with f=form.sample_fps %}
+        </div>
+      </section>
+
+      <section class="card form-section">
+        <div class="section-head"><span class="step">4</span><h2>Placement</h2></div>
+        <div class="form-grid">
+          {% include "partials/field.html" with f=form.mount_height_cm %}
+          {% include "partials/field.html" with f=form.tilt_degrees %}
+          {% include "partials/field.html" with f=form.calibration_notes wide=True %}
+        </div>
+        <label class="switch">{{ form.is_enabled }}<span>Enabled - a worker starts reading this camera within a minute</span></label>
+      </section>
+
+      <div class="form-foot">
+        <a class="button ghost" href="{% if camera %}{% url 'cameras:detail' camera.code %}{% else %}{% url 'cameras:list' %}{% endif %}">Cancel</a>
+        <button type="submit">Save camera</button>
+      </div>
+    </div>
+
+    <aside class="form-aside">
+      <section class="card">
+        <h2>Vendor setup</h2>
+        <p class="small" id="vendor-notes">Choose a vendor to see how to prepare the camera.</p>
+      </section>
+      <section class="card">
+        <h2>Identity camera checklist</h2>
+        <ul class="checklist small">
+          <li>At a doorway, facing people as they walk in</li>
+          <li>Mounted 180-220 cm high</li>
+          <li>Tilted down no more than 15-20&deg;</li>
+          <li>Main stream, at least 1080p</li>
+          <li>No window or strong light behind people</li>
+          <li>Faces at least 60 px wide - check with <b>Test connection</b> after saving</li>
+        </ul>
+        <p class="small muted">A ceiling dome angled steeply down will not name anyone. Mark it <i>presence only</i>.</p>
+      </section>
+    </aside>
   </div>
 </form>
+{{ vendor_data|json_script:"vendor-data" }}
 {% endblock %}
 
 {% block scripts %}
 <script>
-(function () {
-  function sync() {
-    var mode = document.querySelector('input[name="connection_mode"]:checked');
-    var build = mode && mode.value === 'build';
+(function ($) {
+  var vendors = JSON.parse(document.getElementById('vendor-data').textContent);
+  var $vendor = $('[name="vendor"]');
+  var port = document.querySelector('[name="rtsp_port"]');
+  var raw = document.querySelector('[name="raw_url"]');
+  var portTouched = port && port.value && port.value !== '554';
+  if (port) { port.addEventListener('input', function () { portTouched = true; }); }
+
+  function mode() {
+    var checked = document.querySelector('input[name="connection_mode"]:checked');
+    return checked ? checked.value : 'build';
+  }
+
+  function setMode(value) {
+    var radio = document.querySelector('input[name="connection_mode"][value="' + value + '"]');
+    if (radio) { radio.checked = true; }
+  }
+
+  function syncVendor() {
+    var v = vendors[$vendor.val()] || null;
+    var notes = document.getElementById('vendor-notes');
+    notes.textContent = v ? (v.notes || 'No setup notes for this vendor.') : 'Choose a vendor to see how to prepare the camera.';
+
+    var buildRadio = document.querySelector('input[name="connection_mode"][value="build"]');
+    var canBuild = !v || v.connection === 'template';
+    if (buildRadio) {
+      buildRadio.disabled = !canBuild;
+      buildRadio.closest('.seg-option').classList.toggle('disabled', !canBuild);
+    }
+    if (!canBuild) { setMode('raw'); }
+    if (raw) {
+      raw.placeholder = v && v.connection === 'file' ? '/samples/walk.mp4' : 'rtsp://user:pass@192.168.1.64:554/...';
+    }
+    if (v && port && !portTouched) { port.value = v.port || 554; }
+    syncMode();
+  }
+
+  function syncMode() {
+    var build = mode() === 'build';
     document.getElementById('build-fields').hidden = !build;
     document.getElementById('raw-fields').hidden = build;
-
-    var vendorSelect = document.querySelector('[name="vendor"]');
-    var vendor = vendorSelect ? vendorSelect.value : '';
-    document.querySelectorAll('.vendor-note').forEach(function (n) {
-      n.hidden = n.dataset.vendor !== vendor;
+    document.querySelectorAll('.seg-option').forEach(function (opt) {
+      opt.classList.toggle('active', opt.querySelector('input').checked);
     });
+    preview();
   }
-  document.querySelectorAll('input[name="connection_mode"], [name="vendor"]')
-    .forEach(function (el) { el.addEventListener('change', sync); });
-  sync();
-})();
+
+  // Live preview of the address the form will build, password masked.
+  function preview() {
+    var box = document.getElementById('url-preview');
+    var v = vendors[$vendor.val()];
+    if (mode() !== 'build' || !v || v.connection !== 'template' || !v.template) { box.hidden = true; return; }
+    var val = function (name) { var el = document.querySelector('[name="' + name + '"]'); return el ? el.value.trim() : ''; };
+    var user = val('username'), stream = val('stream') || '0', channel = val('channel') || '1';
+    var url = v.template
+      .replace('{credentials}', user ? encodeURIComponent(user) + ':****@' : '')
+      .replace('{host}', val('host') || '<camera-ip>')
+      .replace('{port}', val('rtsp_port') || v.port || 554)
+      .replace('{channel}', channel)
+      .replace('{stream}', stream)
+      .replace('{hik_channel}', channel + ('0' + (parseInt(stream, 10) + 1)).slice(-2))
+      .replace('{width}', val('width') || 1920)
+      .replace('{height}', val('height') || 1080);
+    document.getElementById('url-preview-text').textContent = url;
+    box.hidden = false;
+  }
+
+  // jQuery listener: Select2 fires jQuery change events, not native ones.
+  $vendor.on('change', syncVendor);
+  $('[name="stream"]').on('change', preview);
+  document.querySelectorAll('input[name="connection_mode"]').forEach(function (r) { r.addEventListener('change', syncMode); });
+  ['host', 'rtsp_port', 'channel', 'username', 'width', 'height'].forEach(function (n) {
+    var el = document.querySelector('[name="' + n + '"]');
+    if (el) { el.addEventListener('input', preview); }
+  });
+  syncVendor();
+})(jQuery);
 </script>
 {% endblock %}

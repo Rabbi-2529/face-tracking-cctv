@@ -4,7 +4,10 @@
 <div class="page-head">
   <h1>Cameras</h1>
   {% if can_manage %}
-    <a class="button" href="{% url 'cameras:create' %}">Add camera</a>
+    <div class="head-actions">
+      <a class="button ghost" href="{% url 'cameras:vendors' %}">Vendors</a>
+      <a class="button" href="{% url 'cameras:create' %}">Add camera</a>
+    </div>
   {% endif %}
 </div>
 
@@ -69,7 +72,7 @@
       <tr {% if not c.is_enabled %}class="muted"{% elif c.status == 'offline' %}class="row-bad"{% endif %}>
         <td>
           <a href="{% url 'cameras:detail' c.code %}">{{ c.name }}</a>
-          <div class="muted small"><code>{{ c.code }}</code> &middot; {{ c.get_vendor_display }}</div>
+          <div class="muted small"><code>{{ c.code }}</code> &middot; {{ c.vendor.name|default:"-" }}</div>
         </td>
         <td>{{ c.zone.name }}<div class="muted small">{{ c.zone.floor.name }}</div></td>
         <td>

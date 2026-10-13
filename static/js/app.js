@@ -103,7 +103,7 @@
       var el = this;
       if (el.hasAttribute('data-no-select2') || $(el).hasClass('select2-hidden-accessible')) { return; }
       if (el.closest('.dt-container') && el.classList.contains('dt-input')) { return; }
-      var inline = !el.closest('form.stacked');
+      var inline = !el.closest('form.stacked, .field');
       $(el).select2({
         width: inline ? 'style' : '100%',
         dropdownAutoWidth: true,

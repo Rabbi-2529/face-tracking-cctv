@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.accounts.models import User, UserScope
-from apps.cameras.models import Camera
+from apps.cameras.models import Camera, CameraVendor
 from apps.common.roles import Role
 from apps.employees.models import ConsentRecord, Employee
 from apps.org.models import Building, Department, Designation, Floor, Zone, ZoneAdjacency
@@ -200,7 +200,7 @@ class Command(BaseCommand):
                 defaults={
                     "name": name,
                     "zone": zones[zone_code],
-                    "vendor": Camera.Vendor.DAHUA,
+                    "vendor": CameraVendor.objects.filter(code=CameraVendor.DAHUA).first(),
                     "purpose": purpose,
                     # Placeholder address. Replace with the real stream:
                     # rtsp://user:pass@HOST:554/cam/realmonitor?channel=1&subtype=0

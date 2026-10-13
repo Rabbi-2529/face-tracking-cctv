@@ -27,8 +27,14 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import View
 
-from apps.cameras.forms import VENDOR_HELP, CameraForm, PipelineConfigForm
-from apps.cameras.models import Camera, CameraAuditResult, CameraHealth, PipelineConfig
+from apps.cameras.forms import CameraForm, CameraVendorForm, PipelineConfigForm
+from apps.cameras.models import (
+    Camera,
+    CameraAuditResult,
+    CameraHealth,
+    CameraVendor,
+    PipelineConfig,
+)
 from apps.common.audit import record
 from apps.common.permissions import PermissionService
 from apps.common.roles import Action
@@ -151,7 +157,18 @@ class CameraEditView(CameraAccessMixin, View):
         return {
             "form": form,
             "camera": camera,
-            "vendor_help": VENDOR_HELP,
+            # Per-vendor connection rules for the form's live address preview.
+            "vendor_data": {
+                str(v.pk): {
+                    "name": v.name,
+                    "connection": v.connection,
+                    "template": v.stream_template,
+                    "port": v.default_port,
+                    "notes": v.setup_notes,
+                }
+                for v in form.fields["vendor"].queryset
+            },
+            "can_manage_vendors": True,
             "warnings": form.get_warnings() if hasattr(form, "get_warnings") else [],
         }
 
@@ -555,3 +572,78 @@ class PipelineConfigView(CameraAccessMixin, View):
             "Watch the correction queue for the next few days.",
         )
         return redirect(reverse("cameras:pipeline"))
+
+
+# -------------------------------------------------------------------- vendors
+
+
+class VendorListView(CameraAccessMixin, View):
+    """Camera makes and how each one's stream address is formed."""
+
+    template_name = "cameras/vendor_list.html"
+    write_action = Action.CAMERA_MANAGE
+
+    def get(self, request):
+        self.check_access(request)
+        vendors = CameraVendor.objects.annotate(
+            camera_count=Count("cameras", filter=Q(cameras__deleted_at__isnull=True))
+        ).order_by("name")
+        return render(request, self.template_name, {"vendors": vendors})
+
+
+class VendorEditView(CameraAccessMixin, View):
+    template_name = "cameras/vendor_form.html"
+    write_action = Action.CAMERA_MANAGE
+
+    def _render(self, request, form, vendor):
+        example = ""
+        if vendor is not None and vendor.connection == CameraVendor.Connection.TEMPLATE and vendor.stream_template:
+            try:
+                example = vendor.example_url()
+            except (KeyError, IndexError, ValueError):
+                example = ""
+        return render(request, self.template_name, {"form": form, "vendor": vendor, "example": example})
+
+    def get(self, request, pk=None):
+        self.check_access(request)
+        vendor = get_object_or_404(CameraVendor, pk=pk) if pk else None
+        return self._render(request, CameraVendorForm(instance=vendor), vendor)
+
+    def post(self, request, pk=None):
+        self.check_access(request)
+        vendor = get_object_or_404(CameraVendor, pk=pk) if pk else None
+        form = CameraVendorForm(request.POST, instance=vendor)
+        if not form.is_valid():
+            return self._render(request, form, vendor)
+        saved = form.save()
+        record(
+            "camera.vendor_" + ("updated" if vendor else "created"),
+            object_type="cameras.CameraVendor",
+            object_id=saved.pk,
+            reason=saved.name,
+            metadata={"code": saved.code, "connection": saved.connection},
+        )
+        messages.success(request, f"Vendor '{saved.name}' saved.")
+        return redirect(reverse("cameras:vendors"))
+
+
+class VendorDeleteView(CameraAccessMixin, View):
+    """Remove a vendor no camera uses. In-use vendors are deactivated instead."""
+
+    write_action = Action.CAMERA_MANAGE
+
+    def post(self, request, pk):
+        self.check_access(request)
+        vendor = get_object_or_404(CameraVendor, pk=pk)
+        if vendor.cameras.exists():
+            messages.error(
+                request,
+                f"'{vendor.name}' is used by {vendor.cameras.count()} camera(s). "
+                "Mark it inactive instead, so it is not offered for new cameras.",
+            )
+            return redirect(reverse("cameras:vendors"))
+        name = vendor.name
+        vendor.delete()
+        record("camera.vendor_deleted", object_type="cameras.CameraVendor", object_id=pk, reason=name)
+        messages.info(request, f"Vendor '{name}' deleted.")
+        return redirect(reverse("cameras:vendors"))

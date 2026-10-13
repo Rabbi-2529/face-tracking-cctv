@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{% if vendor %}Edit {{ vendor.name }}{% else %}Add vendor{% endif %}{% endblock %}
+{% block content %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="page-head">
+    <div>
+      <h1>{% if vendor %}Edit vendor{% else %}Add vendor{% endif %}</h1>
+      <p class="muted">How cameras of this make are addressed. Changes apply to cameras added or edited afterwards.</p>
+    </div>
+    <div class="head-actions">
+      <a class="button ghost" href="{% url 'cameras:vendors' %}">Cancel</a>
+      <button type="submit">Save vendor</button>
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}<div class="banner error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+  <div class="form-layout">
+    <div class="form-main">
+      <section class="card form-section">
+        <div class="form-grid">
+          {% include "partials/field.html" with f=form.name %}
+          {% include "partials/field.html" with f=form.code %}
+          {% include "partials/field.html" with f=form.connection %}
+          {% include "partials/field.html" with f=form.default_port %}
+          {% include "partials/field.html" with f=form.stream_template wide=True %}
+          {% include "partials/field.html" with f=form.setup_notes wide=True %}
+        </div>
+        <label class="switch">{{ form.is_active }}<span>Active - offered when adding cameras</span></label>
+      </section>
+    </div>
+    <aside class="form-aside">
+      <section class="card">
+        <h2>Example</h2>
+        {% if example %}
+          <p class="small muted">With sample values, the saved template builds:</p>
+          <code class="wrap block">{{ example }}</code>
+        {% else %}
+          <p class="small muted">Save a template to see the address it builds.</p>
+        {% endif %}
+      </section>
+      <section class="card">
+        <h2>Common paths</h2>
+        <ul class="checklist small">
+          <li><b>Dahua / CP Plus</b><br><code class="wrap">/cam/realmonitor?channel={channel}&amp;subtype={stream}</code></li>
+          <li><b>Hikvision</b><br><code class="wrap">/Streaming/Channels/{hik_channel}</code></li>
+          <li><b>Uniview</b><br><code class="wrap">/media/video{channel}</code></li>
+          <li><b>Axis</b><br><code class="wrap">/axis-media/media.amp</code></li>
+        </ul>
+        <p class="small muted">Prefix each with <code>rtsp://{credentials}{host}:{port}</code>. Not sure? <code>manage.py probe_camera</code> tries the common paths against a real device.</p>
+      </section>
+    </aside>
+  </div>
+</form>
+{% endblock %}

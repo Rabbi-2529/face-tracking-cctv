@@ -23,6 +23,30 @@
   </form>
 </div>
 
+<section class="card readiness {% if readiness.ready %}is-ready{% else %}not-ready{% endif %}">
+  <div class="page-head">
+    <h2>Pilot readiness</h2>
+    <span class="status-chip">{{ readiness.counts.pass }} pass &middot; {{ readiness.counts.warn }} warn &middot; {{ readiness.counts.fail }} fail</span>
+  </div>
+  <p class="small muted">The runbook's "before day 1" list, checked from live data.
+    {% if readiness.ready %}Nothing blocks the pilot; clear the warnings when you can.{% else %}Fix every failure before day 1.{% endif %}
+    Signage, legal sign-off and camera clocks still need a human check.</p>
+  <table class="grid" data-dt="off">
+    <thead><tr><th>Area</th><th>Check</th><th>Status</th><th>Found</th><th>What to do</th></tr></thead>
+    <tbody>
+      {% for c in readiness.checks %}
+        <tr class="chk-{{ c.status }}">
+          <td class="small muted">{{ c.area }}</td>
+          <td>{{ c.name }}</td>
+          <td><span class="chk chk-{{ c.status }}">{{ c.status|upper }}</span></td>
+          <td class="small">{{ c.detail }}</td>
+          <td class="small">{{ c.fix }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
 <div class="tiles">
   <div class="tile"><span class="n">{{ current.confirmed|add:current.probable|add:current.unknown }}</span><span class="l">scored decisions in window</span></div>
   <div class="tile"><span class="n">{{ current.confirmed }}</span><span class="l">confirmed at current thresholds</span></div>

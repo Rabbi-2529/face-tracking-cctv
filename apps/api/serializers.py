@@ -44,6 +44,7 @@ class CameraSerializer(serializers.ModelSerializer):
     """Note the absence of rtsp_url, username and password - by design."""
 
     zone_code = serializers.CharField(source="zone.code", read_only=True)
+    vendor = serializers.CharField(source="vendor.name", read_only=True, default=None)
     is_identity_capable = serializers.BooleanField(read_only=True)
 
     class Meta:

@@ -23,57 +23,10 @@ from urllib.parse import quote, urlparse
 
 from django import forms
 from django.core.exceptions import ValidationError
+from django.db import models
 
-from apps.cameras.models import Camera, CameraGroup, PipelineConfig
+from apps.cameras.models import Camera, CameraGroup, CameraVendor, PipelineConfig
 from apps.org.models import Zone
-
-# Stream templates per vendor. {channel} is 1-based; {stream} is 0 for the
-# main (full-resolution) stream and 1 for the sub stream.
-STREAM_TEMPLATES = {
-    Camera.Vendor.DAHUA: (
-        "rtsp://{credentials}{host}:{port}/cam/realmonitor"
-        "?channel={channel}&subtype={stream}"
-    ),
-    # CP Plus hardware is Dahua under the badge and uses the same path.
-    Camera.Vendor.CP_PLUS: (
-        "rtsp://{credentials}{host}:{port}/cam/realmonitor"
-        "?channel={channel}&subtype={stream}"
-    ),
-    # Hikvision encodes channel and stream as a single number: 101 is
-    # channel 1 main stream, 102 is channel 1 sub stream.
-    Camera.Vendor.HIKVISION: (
-        "rtsp://{credentials}{host}:{port}/Streaming/Channels/{hik_channel}"
-    ),
-    Camera.Vendor.AXIS: (
-        "rtsp://{credentials}{host}:{port}/axis-media/media.amp"
-        "?videocodec=h264&resolution={width}x{height}"
-    ),
-}
-
-VENDOR_HELP = {
-    Camera.Vendor.DAHUA: (
-        "Dahua: create an Operator-level user under Setting &rarr; System &rarr; "
-        "Account. Enable RTSP (port 554) and ONVIF, and turn OFF UPnP and P2P. "
-        "Use the main stream for identity cameras."
-    ),
-    Camera.Vendor.CP_PLUS: (
-        "CP Plus uses the Dahua stream path. Create a non-admin user and "
-        "disable P2P."
-    ),
-    Camera.Vendor.HIKVISION: (
-        "Hikvision: create an Operator user under Configuration &rarr; System "
-        "&rarr; User Management. Channel 1 main stream is 101."
-    ),
-    Camera.Vendor.AXIS: "Axis: create a viewer account; RTSP is on by default.",
-    Camera.Vendor.ONVIF: (
-        "Generic ONVIF: paste the full RTSP URL from the device's own "
-        "configuration page."
-    ),
-    Camera.Vendor.FILE: (
-        "Video file, for testing. Give a path as the VISION container sees it "
-        "(the project's ./samples directory is mounted at /samples)."
-    ),
-}
 
 
 class CameraForm(forms.ModelForm):
@@ -181,6 +134,17 @@ class CameraForm(forms.ModelForm):
         self.fields["group"].queryset = CameraGroup.objects.all()
         self.fields["group"].required = False
 
+        # Active vendors, plus this camera's own even if since deactivated,
+        # so editing an older camera never silently changes its vendor.
+        vendors = CameraVendor.objects.filter(is_active=True)
+        if self.instance.pk and self.instance.vendor_id:
+            vendors = CameraVendor.objects.filter(
+                models.Q(is_active=True) | models.Q(pk=self.instance.vendor_id)
+            )
+        self.fields["vendor"].queryset = vendors.order_by("name")
+        self.fields["vendor"].required = True
+        self.fields["vendor"].empty_label = "Choose a vendor"
+
         if self.editing:
             # Credentials are never rendered back; blank means "keep".
             self.fields["connection_mode"].initial = "raw"
@@ -209,13 +173,12 @@ class CameraForm(forms.ModelForm):
         mode = data.get("connection_mode")
         vendor = data.get("vendor")
 
-        if vendor in {Camera.Vendor.ONVIF, Camera.Vendor.FILE} and mode == "build":
+        if vendor is not None and vendor.connection != CameraVendor.Connection.TEMPLATE and mode == "build":
             raise ValidationError(
                 {
                     "connection_mode": (
-                        f"There is no standard stream path for "
-                        f"'{Camera.Vendor(vendor).label}'. Paste the full URL "
-                        "or path instead."
+                        f"There is no standard stream path for '{vendor.name}'. "
+                        "Paste the full URL or path instead."
                     )
                 }
             )
@@ -265,8 +228,8 @@ class CameraForm(forms.ModelForm):
 
         return data
 
-    def _validate_raw(self, raw: str, vendor: str) -> str:
-        if vendor == Camera.Vendor.FILE:
+    def _validate_raw(self, raw: str, vendor) -> str:
+        if vendor is not None and vendor.connection == CameraVendor.Connection.FILE:
             # A path, not a URL. The vision container has to be able to see it.
             if not raw.startswith("/"):
                 raise ValidationError(
@@ -295,10 +258,12 @@ class CameraForm(forms.ModelForm):
 
     def _build_url(self, data: dict) -> str:
         vendor = data.get("vendor")
-        template = STREAM_TEMPLATES.get(vendor)
-        if template is None:
+        if vendor is None:
+            raise ValidationError({"vendor": "Choose a vendor."})
+        template = vendor.stream_template if vendor.connection == CameraVendor.Connection.TEMPLATE else ""
+        if not template:
             raise ValidationError(
-                {"vendor": f"No stream template for {vendor}; paste a full URL."}
+                {"vendor": f"'{vendor.name}' has no stream template; paste a full URL."}
             )
 
         host = data.get("host")
@@ -331,7 +296,7 @@ class CameraForm(forms.ModelForm):
         return template.format(
             credentials=credentials,
             host=host,
-            port=data.get("rtsp_port") or 554,
+            port=data.get("rtsp_port") or vendor.default_port or 554,
             channel=channel,
             stream=stream,
             hik_channel=f"{channel}{int(stream) + 1:02d}",
@@ -379,6 +344,44 @@ class CameraForm(forms.ModelForm):
         if commit:
             camera.save()
         return camera
+
+
+class CameraVendorForm(forms.ModelForm):
+    """Add or edit a camera make and how its stream address is formed."""
+
+    class Meta:
+        model = CameraVendor
+        fields = [
+            "name",
+            "code",
+            "connection",
+            "stream_template",
+            "default_port",
+            "setup_notes",
+            "is_active",
+        ]
+        widgets = {
+            "setup_notes": forms.Textarea(attrs={"rows": 3}),
+            "stream_template": forms.TextInput(attrs={"class": "mono"}),
+        }
+        help_texts = {
+            "code": "Short stable identifier, e.g. 'uniview'.",
+            "stream_template": (
+                "Used when the connection is 'Build the URL from a template'. "
+                "Placeholders: {credentials} {host} {port} {channel} {stream} "
+                "{hik_channel} {width} {height}. {stream} is 0 for the main stream, "
+                "1 for the sub stream; {hik_channel} is e.g. 101."
+            ),
+        }
+
+    def clean_code(self) -> str:
+        code = self.cleaned_data["code"].strip().lower()
+        existing = CameraVendor.objects.filter(code=code)
+        if self.instance.pk:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise ValidationError(f"A vendor with code '{code}' already exists.")
+        return code
 
 
 class PipelineConfigForm(forms.ModelForm):

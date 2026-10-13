@@ -22,7 +22,7 @@ from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from apps.cameras.models import Camera
+from apps.cameras.models import Camera, CameraVendor
 from apps.employees.enrollment import enroll_image, gallery_coverage
 from apps.employees.models import Employee
 from apps.org.models import Zone
@@ -123,7 +123,7 @@ class Command(BaseCommand):
             defaults={
                 "name": "Test file camera",
                 "zone": zone,
-                "vendor": Camera.Vendor.FILE,
+                "vendor": CameraVendor.objects.filter(code=CameraVendor.FILE).first(),
                 "purpose": Camera.Purpose.IDENTITY,
                 # OpenCV opens a plain path exactly as it opens an RTSP URL.
                 "rtsp_url": options["video"],
