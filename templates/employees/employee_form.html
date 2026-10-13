@@ -1,45 +1,198 @@
 {% extends "base.html" %}
 {% block title %}{% if creating %}Add employee{% else %}Edit {{ employee.full_name }}{% endif %}{% endblock %}
 {% block content %}
-<h1>{% if creating %}Add employee{% else %}Edit employee{% endif %}</h1>
-
-{% if creating %}
-<div class="banner">
-  Three steps set a person up: <b>1. this record</b> &rarr;
-  2. record their consent &rarr; 3. enrol their face images.
-  You will be taken through them in order.
-</div>
-{% endif %}
-
-{{ form.non_field_errors }}
-
-<form method="post" class="card stacked">
+<form method="post" novalidate>
   {% csrf_token %}
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'employee_code' or f.name == 'full_name' %}
-      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
-        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
+  <div class="page-head">
+    <div>
+      <h1>{% if creating %}Add employee{% else %}Edit employee{% endif %}</h1>
+      <p class="muted">{% if creating %}Step 1 of 3: this record, then consent, then face images.{% else %}<code>{{ employee.employee_code }}</code> &middot; {{ employee.full_name }}{% endif %}</p>
+    </div>
+    <div class="head-actions">
+      <a class="button ghost" href="{% if employee %}{% url 'employees:setup' employee.uuid %}{% else %}{% url 'tracking:employee_list' %}{% endif %}">Cancel</a>
+      <button type="submit">{% if creating %}Add and continue{% else %}Save{% endif %}</button>
+    </div>
   </div>
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'department' or f.name == 'designation' %}
-      <label>{{ f.label }}{% if f.field.required %} <span class="req">*</span>{% endif %}
-        {{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
-  <div class="field-row">
-    {% for f in form %}{% if f.name == 'date_of_joining' or f.name == 'status' %}
-      <label>{{ f.label }}{{ f }}{% if f.help_text %}<span class="muted small">{{ f.help_text }}</span>{% endif %}{{ f.errors }}</label>
-    {% endif %}{% endfor %}
-  </div>
-  <label>{{ form.home_zone.label }}{{ form.home_zone }}
-    <span class="muted small">{{ form.home_zone.help_text }}</span>{{ form.home_zone.errors }}</label>
-  <label class="check">{{ form.is_trackable }} Trackable
-    <span class="muted small">&mdash; {{ form.is_trackable.help_text }}</span></label>
 
-  <div class="form-actions">
-    <button type="submit">{% if creating %}Add and continue{% else %}Save{% endif %}</button>
-    <a href="{% if employee %}{% url 'employees:setup' employee.uuid %}{% else %}{% url 'tracking:employee_list' %}{% endif %}">Cancel</a>
+  <ol class="stepper">
+    <li class="{% if creating %}current{% else %}done{% endif %}"><span class="dot">1</span><span class="txt"><b>Employee record</b><small>Code, name, department</small></span></li>
+    <li class="{% if not creating and employee.has_active_consent %}done{% endif %}"><span class="dot">2</span><span class="txt"><b>Consent</b><small>Required before matching</small></span></li>
+    <li class="{% if not creating and employee.enrollment_count >= 5 %}done{% endif %}"><span class="dot">3</span><span class="txt"><b>Face images</b><small>5 or more views</small></span></li>
+  </ol>
+
+  {% if form.non_field_errors %}<div class="banner error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  {% if form.errors and not form.non_field_errors %}<div class="banner error">Some fields need attention - see the highlighted entries below.</div>{% endif %}
+
+  <div class="form-layout">
+    <div class="form-main">
+      <section class="card form-section">
+        <div class="section-head"><span class="step">1</span><div><h2>Person</h2><div class="hint">Identity as it appears in your HR system.</div></div></div>
+        <div class="form-grid">
+          {% include "partials/field.html" with f=form.employee_code %}
+          {% include "partials/field.html" with f=form.full_name %}
+          {% include "partials/field.html" with f=form.date_of_joining %}
+          {% include "partials/field.html" with f=form.status %}
+        </div>
+      </section>
+
+      <section class="card form-section">
+        <div class="section-head"><span class="step">2</span><div><h2>Organisation</h2><div class="hint">Where they work. The department decides which HR users can see them.</div></div>
+          <a class="section-link" href="{% url 'employees:structure' %}">Manage lists</a></div>
+        <div class="form-grid">
+          <div class="field{% if form.department.errors %} has-error{% endif %}">
+            <label for="{{ form.department.id_for_label }}">{{ form.department.label }}{% if form.department.field.required %} <span class="req">*</span>{% endif %}
+              {% if 'user.manage' in granted_actions %}<button type="button" class="linkish add-new" data-target="department">+ New</button>{% endif %}</label>
+            {{ form.department }}
+            {% if form.department.help_text %}<div class="hint">{{ form.department.help_text }}</div>{% endif %}
+            {% for e in form.department.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+            {% if 'user.manage' in granted_actions %}
+            <div class="quick-add" data-kind="department" hidden>
+              <input name="qa_name" placeholder="Department name" autocomplete="off">
+              <input name="qa_code" placeholder="Code, e.g. FIN" maxlength="20" autocomplete="off">
+              <button type="button" class="qa-save">Add</button>
+              <button type="button" class="linkish qa-cancel">Cancel</button>
+              <div class="field-error qa-error" hidden></div>
+            </div>
+            {% endif %}
+          </div>
+
+          <div class="field{% if form.designation.errors %} has-error{% endif %}">
+            <label for="{{ form.designation.id_for_label }}">{{ form.designation.label }}
+              {% if 'employee.manage' in granted_actions %}<button type="button" class="linkish add-new" data-target="designation">+ New</button>{% endif %}</label>
+            {{ form.designation }}
+            {% for e in form.designation.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+            {% if 'employee.manage' in granted_actions %}
+            <div class="quick-add" data-kind="designation" hidden>
+              <input name="qa_title" placeholder="Job title, e.g. Site Engineer" autocomplete="off">
+              <button type="button" class="qa-save">Add</button>
+              <button type="button" class="linkish qa-cancel">Cancel</button>
+              <div class="field-error qa-error" hidden></div>
+            </div>
+            {% endif %}
+          </div>
+
+          {% include "partials/field.html" with f=form.home_zone wide=True %}
+        </div>
+      </section>
+
+      <section class="card form-section">
+        <div class="section-head"><span class="step">3</span><div><h2>Tracking</h2><div class="hint">Whether face matching may include this person at all.</div></div></div>
+        <label class="switch toggle">{{ form.is_trackable }}<span class="track" aria-hidden="true"></span><span>Include in face matching</span></label>
+        <div class="hint">{{ form.is_trackable.help_text }} Consent is still required either way.</div>
+      </section>
+
+      <div class="form-foot">
+        <a class="button ghost" href="{% if employee %}{% url 'employees:setup' employee.uuid %}{% else %}{% url 'tracking:employee_list' %}{% endif %}">Cancel</a>
+        <button type="submit">{% if creating %}Add and continue{% else %}Save{% endif %}</button>
+      </div>
+    </div>
+
+    <aside class="form-aside">
+      <section class="card profile-card">
+        <div class="profile-avatar" id="pv-avatar">?</div>
+        <div class="profile-name" id="pv-name">New employee</div>
+        <div class="profile-code" id="pv-code">No code yet</div>
+        <dl class="profile-facts">
+          <dt>Department</dt><dd id="pv-dept">-</dd>
+          <dt>Designation</dt><dd id="pv-desig">-</dd>
+          <dt>Joined</dt><dd id="pv-joined">-</dd>
+          <dt>Status</dt><dd><span class="status-chip" id="pv-status">-</span></dd>
+          <dt>Matching</dt><dd id="pv-track">-</dd>
+        </dl>
+      </section>
+      <section class="card">
+        <h2>Setting a person up</h2>
+        <ul class="checklist small">
+          <li><b>1. This record</b> - code, name, department</li>
+          <li><b>2. Consent</b> - nobody is matched without it</li>
+          <li><b>3. Face images</b> - 5 or more: frontal, turned left and right, with and without glasses</li>
+        </ul>
+        <p class="small muted">The department decides which HR users can see this person.</p>
+      </section>
+    </aside>
   </div>
 </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function ($) {
+  var urls = {
+    department: "{% url 'employees:structure_quick_add' 'department' %}",
+    designation: "{% url 'employees:structure_quick_add' 'designation' %}"
+  };
+  function csrf() { var m = document.cookie.match(/csrftoken=([^;]+)/); return m ? m[1] : ''; }
+
+  document.querySelectorAll('.add-new').forEach(function (link) {
+    link.addEventListener('click', function () {
+      var panel = link.closest('.field').querySelector('.quick-add');
+      panel.hidden = false;
+      panel.querySelector('input').focus();
+    });
+  });
+
+  document.querySelectorAll('.quick-add').forEach(function (panel) {
+    var kind = panel.dataset.kind;
+    var error = panel.querySelector('.qa-error');
+    var close = function () {
+      panel.hidden = true; error.hidden = true;
+      panel.querySelectorAll('input').forEach(function (i) { i.value = ''; });
+    };
+    panel.querySelector('.qa-cancel').addEventListener('click', close);
+    panel.querySelectorAll('input').forEach(function (input) {
+      input.addEventListener('keydown', function (e) {
+        // Enter adds the entry instead of submitting the whole employee form.
+        if (e.key === 'Enter') { e.preventDefault(); panel.querySelector('.qa-save').click(); }
+        if (e.key === 'Escape') { close(); }
+      });
+    });
+    panel.querySelector('.qa-save').addEventListener('click', function () {
+      var body = kind === 'department'
+        ? { name: panel.querySelector('[name=qa_name]').value, code: panel.querySelector('[name=qa_code]').value }
+        : { title: panel.querySelector('[name=qa_title]').value };
+      fetch(urls[kind], {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+        body: JSON.stringify(body)
+      }).then(function (r) { return r.json().then(function (d) { return [r.ok, d]; }); })
+        .then(function (res) {
+          if (!res[0]) { error.textContent = res[1].error || 'Could not add.'; error.hidden = false; return; }
+          var select = $('[name="' + kind + '"]');
+          select.append(new Option(res[1].text, res[1].id, true, true)).trigger('change');
+          close();
+        })
+        .catch(function () { error.textContent = 'Could not add.'; error.hidden = false; });
+    });
+  });
+
+  // Live profile preview: reflects the form as it is filled in.
+  function text(id, value) { document.getElementById(id).textContent = value; }
+  function selected(name) {
+    var el = document.querySelector('[name="' + name + '"]');
+    if (!el || !el.value) { return '-'; }
+    return el.options[el.selectedIndex].text;
+  }
+  function refresh() {
+    var name = (document.querySelector('[name="full_name"]').value || '').trim();
+    var code = (document.querySelector('[name="employee_code"]').value || '').trim().toUpperCase();
+    var initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w[0].toUpperCase(); }).join('');
+    text('pv-avatar', initials || '?');
+    text('pv-name', name || 'New employee');
+    text('pv-code', code || 'No code yet');
+    text('pv-dept', selected('department'));
+    text('pv-desig', selected('designation'));
+    var joined = document.querySelector('[name="date_of_joining"]');
+    text('pv-joined', joined && joined._flatpickr && joined.value ? joined._flatpickr.altInput.value : (joined && joined.value) || '-');
+    text('pv-status', selected('status'));
+    var track = document.querySelector('[name="is_trackable"]');
+    var trackEl = document.getElementById('pv-track');
+    trackEl.textContent = track && track.checked ? 'Included' : 'Excluded';
+    trackEl.className = track && track.checked ? 'ok' : 'bad';
+  }
+  document.querySelectorAll('[name="full_name"], [name="employee_code"]').forEach(function (el) { el.addEventListener('input', refresh); });
+  $('[name="department"], [name="designation"], [name="status"]').on('change', refresh);
+  document.querySelectorAll('[name="date_of_joining"], [name="is_trackable"]').forEach(function (el) { el.addEventListener('change', refresh); });
+  setTimeout(refresh, 0);
+})(jQuery);
+</script>
 {% endblock %}

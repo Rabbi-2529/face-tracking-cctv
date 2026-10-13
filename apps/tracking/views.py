@@ -414,13 +414,48 @@ class EmployeeListView(ActionRequiredMixin, ListView):
             .prefetch_related("enrollments", "consent_records")
             .order_by("full_name")
         )
-        query = self.request.GET.get("q", "").strip()
+        params = self.request.GET
+        query = params.get("q", "").strip()
         if query:
             qs = qs.filter(
                 Q(full_name__icontains=query) | Q(employee_code__icontains=query)
             )
             record("employee.search", reason=query, metadata={"q": query})
+        # Filters narrow what the user may already see; they never widen it.
+        department = params.get("department", "")
+        if department.isdigit():
+            qs = qs.filter(department_id=int(department))
+        elif department == "none":
+            qs = qs.filter(department__isnull=True)
+        designation = params.get("designation", "")
+        if designation.isdigit():
+            qs = qs.filter(designation_id=int(designation))
+        elif designation == "none":
+            qs = qs.filter(designation__isnull=True)
+        status = params.get("status", "")
+        if status in Employee.Status.values:
+            qs = qs.filter(status=status)
         return qs
+
+    def get_context_data(self, **kwargs):
+        from apps.org.models import Department, Designation
+
+        ctx = super().get_context_data(**kwargs)
+        # Only departments that hold someone this user can see, so an HR
+        # user's filter does not advertise the rest of the organisation.
+        visible = visible_employees(self.request.user, Employee.objects.alive())
+        ctx["departments"] = Department.objects.filter(
+            pk__in=visible.values_list("department_id", flat=True)
+        ).order_by("name")
+        ctx["designations"] = Designation.objects.order_by("level", "title")
+        ctx["statuses"] = Employee.Status.choices
+        query = self.request.GET.copy()
+        query.pop("page", None)
+        ctx["filter_query"] = query.urlencode()
+        ctx["filtered"] = any(
+            self.request.GET.get(k) for k in ("q", "department", "designation", "status")
+        )
+        return ctx
 
 
 class AuditLogView(ActionRequiredMixin, ListView):

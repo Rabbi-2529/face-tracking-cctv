@@ -41,6 +41,7 @@
       <div class="nav-label">People</div>
       {% if 'employee.view' in granted_actions %}
         <a class="nav-link" href="{% url 'tracking:employee_list' %}">{% include "partials/icon.html" with name="employees" %}Employees</a>
+        <a class="nav-link" href="{% url 'employees:structure' %}">{% include "partials/icon.html" with name="site" %}Departments &amp; titles</a>
       {% endif %}
       {% if 'trackrequest.create' in granted_actions or 'trackrequest.approve' in granted_actions %}
         <a class="nav-link" href="{% url 'watchlist:list' %}">{% include "partials/icon.html" with name="requests" %}Tracking requests</a>

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block title %}Departments &amp; designations{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Departments &amp; designations</h1>
+    <p class="muted">The lists offered on every employee record.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button ghost" href="{% url 'tracking:employee_list' %}">Employees</a>
+  </div>
+</div>
+
+<div class="two-col">
+  <section class="card" id="department">
+    <div class="page-head">
+      <h2>Departments</h2>
+      {% if can_departments %}<a class="button" href="{% url 'employees:structure_create' 'department' %}">Add department</a>{% endif %}
+    </div>
+    <p class="small muted">Departments decide access: an HR user sees the employees of the
+      departments assigned to them. {% if not can_departments %}Only a Super Admin can add or change them.{% endif %}</p>
+    <table class="grid">
+      <thead><tr><th>Department</th><th>Code</th><th>Head</th><th>Employees</th><th>HR access</th><th></th></tr></thead>
+      <tbody>
+        {% for d in departments %}
+          <tr>
+            <td><b>{{ d.name }}</b></td>
+            <td><code>{{ d.code }}</code></td>
+            <td class="small">{{ d.head.full_name|default:"-" }}</td>
+            <td><a href="{% url 'tracking:employee_list' %}?department={{ d.pk }}">{{ d.employee_count }}</a></td>
+            <td class="small">{{ d.scoped_user_count }} user{{ d.scoped_user_count|pluralize }}</td>
+            <td class="row-actions">
+              {% if can_departments %}
+                <a class="button ghost" href="{% url 'employees:structure_edit' 'department' d.pk %}">Edit</a>
+                {% if not d.employee_count and not d.scoped_user_count %}
+                  <form method="post" action="{% url 'employees:structure_delete' 'department' d.pk %}" class="inline"
+                        onsubmit="return confirm('Delete {{ d.name|escapejs }}?');">
+                    {% csrf_token %}<button type="submit" class="bad-btn">Delete</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6" class="muted">No departments yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" id="designation">
+    <div class="page-head">
+      <h2>Designations</h2>
+      {% if can_designations %}<a class="button" href="{% url 'employees:structure_create' 'designation' %}">Add designation</a>{% endif %}
+    </div>
+    <p class="small muted">Job titles. Anyone who manages employees can add them.</p>
+    <table class="grid">
+      <thead><tr><th>Designation</th><th>Level</th><th>Employees</th><th></th></tr></thead>
+      <tbody>
+        {% for d in designations %}
+          <tr>
+            <td><b>{{ d.title }}</b></td>
+            <td>{{ d.level }}</td>
+            <td><a href="{% url 'tracking:employee_list' %}?designation={{ d.pk }}">{{ d.employee_count }}</a></td>
+            <td class="row-actions">
+              {% if can_designations %}
+                <a class="button ghost" href="{% url 'employees:structure_edit' 'designation' d.pk %}">Edit</a>
+                {% if not d.employee_count %}
+                  <form method="post" action="{% url 'employees:structure_delete' 'designation' d.pk %}" class="inline"
+                        onsubmit="return confirm('Delete {{ d.title|escapejs }}?');">
+                    {% csrf_token %}<button type="submit" class="bad-btn">Delete</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="muted">No designations yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}

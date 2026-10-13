@@ -27,7 +27,7 @@
           {% include "partials/field.html" with f=form.stream_template wide=True %}
           {% include "partials/field.html" with f=form.setup_notes wide=True %}
         </div>
-        <label class="switch">{{ form.is_active }}<span>Active - offered when adding cameras</span></label>
+        <label class="switch toggle">{{ form.is_active }}<span class="track" aria-hidden="true"></span><span>Active - offered when adding cameras</span></label>
       </section>
     </div>
     <aside class="form-aside">

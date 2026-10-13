@@ -1,52 +1,95 @@
 {% extends "base.html" %}
 {% block title %}Employees{% endblock %}
 {% block content %}
-<h1>Employees</h1>
 <div class="page-head">
-  <p class="muted">{{ paginator.count }} in your scope.</p>
-  {% if 'employee.manage' in granted_actions %}
-    <a class="button" href="{% url 'employees:create' %}">Add employee</a>
-  {% endif %}
+  <div>
+    <h1>Employees</h1>
+    <p class="muted">{{ paginator.count }} {% if filtered %}matching{% else %}in your scope{% endif %}.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button ghost" href="{% url 'employees:structure' %}">Departments &amp; designations</a>
+    {% if 'employee.manage' in granted_actions %}
+      <a class="button" href="{% url 'employees:create' %}">Add employee</a>
+    {% endif %}
+  </div>
 </div>
 
-<form method="get" class="inline-form">
-  <input name="q" value="{{ request.GET.q }}" placeholder="Name or employee code">
-  <button type="submit">Search</button>
+<form method="get" class="card filter-bar">
+  <div class="field grow">
+    <label for="f-q">Search</label>
+    <input id="f-q" name="q" value="{{ request.GET.q }}" placeholder="Name or employee code">
+  </div>
+  <div class="field">
+    <label for="f-dept">Department</label>
+    <select id="f-dept" name="department">
+      <option value="">All departments</option>
+      {% for d in departments %}
+        <option value="{{ d.pk }}" {% if request.GET.department == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+      <option value="none" {% if request.GET.department == "none" %}selected{% endif %}>No department</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-desig">Designation</label>
+    <select id="f-desig" name="designation">
+      <option value="">All designations</option>
+      {% for d in designations %}
+        <option value="{{ d.pk }}" {% if request.GET.designation == d.pk|stringformat:"s" %}selected{% endif %}>{{ d.title }}</option>
+      {% endfor %}
+      <option value="none" {% if request.GET.designation == "none" %}selected{% endif %}>No designation</option>
+    </select>
+  </div>
+  <div class="field">
+    <label for="f-status">Status</label>
+    <select id="f-status" name="status">
+      <option value="">Any status</option>
+      {% for value, label in statuses %}
+        <option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="head-actions">
+    <button type="submit">Apply</button>
+    {% if filtered %}<a class="button ghost" href="{% url 'tracking:employee_list' %}">Clear</a>{% endif %}
+  </div>
 </form>
 
+<section class="card">
 <table class="grid" data-dt-paging="off">
-  <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Status</th>
+  <thead><tr><th>Code</th><th>Name</th><th>Department</th><th>Designation</th><th>Status</th>
              <th>Enrolments</th><th>Matchable</th><th></th></tr></thead>
   <tbody>
     {% for e in employees %}
       <tr>
         <td><code>{{ e.employee_code }}</code></td>
-        <td>{{ e.full_name }}</td>
-        <td>{{ e.department.name|default:"&mdash;" }}</td>
+        <td><b>{{ e.full_name }}</b></td>
+        <td>{{ e.department.name|default:"-" }}</td>
+        <td>{{ e.designation.title|default:"-" }}</td>
         <td>{{ e.get_status_display }}</td>
         <td {% if e.enrollment_count < 5 %}class="warn-cell"{% endif %}>
           {{ e.enrollment_count }}{% if e.enrollment_count < 5 %}
             <span class="small">5+ recommended</span>{% endif %}
         </td>
-        <td>{% if e.is_processable %}<span class="ok">yes</span>{% else %}<span class="bad">no</span>{% endif %}</td>
-        <td>
-          <a href="{% url 'tracking:employee_timeline' e.uuid %}">Timeline</a>
+        <td>{% if e.is_processable %}<span class="chk chk-pass">YES</span>{% else %}<span class="chk chk-fail">NO</span>{% endif %}</td>
+        <td class="row-actions">
+          <a class="button ghost" href="{% url 'tracking:employee_timeline' e.uuid %}">Timeline</a>
           {% if 'employee.view' in granted_actions %}
-            &middot; <a href="{% url 'employees:setup' e.uuid %}">Setup</a>
+            <a class="button ghost" href="{% url 'employees:setup' e.uuid %}">Setup</a>
           {% endif %}
         </td>
       </tr>
     {% empty %}
-      <tr><td colspan="7" class="muted">No employees in your scope.</td></tr>
+      <tr><td colspan="8" class="muted">{% if filtered %}No employees match these filters.{% else %}No employees in your scope.{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>
+</section>
 
 {% if page_obj.has_other_pages %}
 <nav class="pager">
-  {% if page_obj.has_previous %}<a href="?page={{ page_obj.previous_page_number }}&amp;q={{ request.GET.q }}">Previous</a>{% endif %}
+  {% if page_obj.has_previous %}<a href="?{{ filter_query }}&amp;page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
   <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
-  {% if page_obj.has_next %}<a href="?page={{ page_obj.next_page_number }}&amp;q={{ request.GET.q }}">Next</a>{% endif %}
+  {% if page_obj.has_next %}<a href="?{{ filter_query }}&amp;page={{ page_obj.next_page_number }}">Next</a>{% endif %}
 </nav>
 {% endif %}
 {% endblock %}

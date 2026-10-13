@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}{% if instance %}Edit{% else %}Add{% endif %} {{ kind }}{% endblock %}
+{% block content %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="page-head">
+    <div>
+      <h1>{% if instance %}Edit {{ kind }}{% else %}Add {{ kind }}{% endif %}</h1>
+      <p class="muted">{{ spec.blurb }}</p>
+    </div>
+    <div class="head-actions">
+      <a class="button ghost" href="{% url 'employees:structure' %}#{{ kind }}">Cancel</a>
+      <button type="submit">Save {{ kind }}</button>
+    </div>
+  </div>
+  {% if form.non_field_errors %}<div class="banner error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+  <section class="card form-section narrow">
+    <div class="form-grid">
+      {% for f in form %}{% include "partials/field.html" with f=f %}{% endfor %}
+    </div>
+  </section>
+</form>
+{% endblock %}

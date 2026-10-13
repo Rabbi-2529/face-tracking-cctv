@@ -88,7 +88,7 @@
           {% include "partials/field.html" with f=form.tilt_degrees %}
           {% include "partials/field.html" with f=form.calibration_notes wide=True %}
         </div>
-        <label class="switch">{{ form.is_enabled }}<span>Enabled - a worker starts reading this camera within a minute</span></label>
+        <label class="switch toggle">{{ form.is_enabled }}<span class="track" aria-hidden="true"></span><span>Enabled - a worker starts reading this camera within a minute</span></label>
       </section>
 
       <div class="form-foot">
