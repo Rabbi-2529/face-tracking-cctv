@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+{% block title %}Accuracy{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Accuracy</h1>
+    <p class="muted">The pilot's instrument panel. Measure here before changing
+       thresholds or trusting a camera. Aggregates only: no names, images or
+       face templates.</p>
+  </div>
+  <form method="get" class="inline-form">
+    <label>Window
+      <select name="days" onchange="this.form.submit()">
+        <option value="1" {% if days == 1 %}selected{% endif %}>Last 24 hours</option>
+        <option value="3" {% if days == 3 %}selected{% endif %}>Last 3 days</option>
+        <option value="7" {% if days == 7 %}selected{% endif %}>Last 7 days</option>
+        <option value="14" {% if days == 14 %}selected{% endif %}>Last 14 days</option>
+        <option value="30" {% if days == 30 %}selected{% endif %}>Last 30 days</option>
+      </select>
+    </label>
+    <input type="hidden" name="high" value="{{ high }}">
+    <input type="hidden" name="low" value="{{ low }}">
+  </form>
+</div>
+
+<div class="tiles">
+  <div class="tile"><span class="n">{{ current.confirmed|add:current.probable|add:current.unknown }}</span><span class="l">scored decisions in window</span></div>
+  <div class="tile"><span class="n">{{ current.confirmed }}</span><span class="l">confirmed at current thresholds</span></div>
+  <div class="tile {% if current.probable > current.confirmed %}warn-tile{% endif %}"><span class="n">{{ current.probable }}</span><span class="l">only probable</span></div>
+  <div class="tile {% if errors_above_high %}bad-tile{% endif %}"><span class="n">{{ known_errors|length }}</span><span class="l">confirmed-wrong identifications (from corrections)</span></div>
+</div>
+
+<section class="card">
+  <div class="page-head">
+    <h2>Threshold what-if</h2>
+    {% if can_configure %}<a class="button" href="{% url 'cameras:pipeline' %}">Change thresholds</a>{% endif %}
+  </div>
+  <p class="muted small">
+    Each bar is the number of decisions whose best gallery match scored in that
+    range. Bars are shaded by the band they fall in under the thresholds below.
+    Current: confirmed at {{ config.match_threshold_high }}, probable at
+    {{ config.match_threshold_low }}.
+  </p>
+
+  <div class="histogram" role="img" aria-label="Distribution of match scores">
+    {% for b in histogram %}
+      <div class="bar band-{{ b.band }}" title="{{ b.from|floatformat:2 }}-{{ b.to|floatformat:2 }}: {{ b.n }}">
+        <span class="fill" style="height: {{ b.pct }}%"></span>
+        <span class="tick">{% if forloop.counter0|divisibleby:4 %}{{ b.from|floatformat:1 }}{% endif %}</span>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="legend small">
+    <span><i class="sw band-confirmed"></i>confirmed</span>
+    <span><i class="sw band-probable"></i>probable</span>
+    <span><i class="sw band-unknown"></i>unknown</span>
+  </div>
+
+  <form method="get" class="inline-form">
+    <input type="hidden" name="days" value="{{ days }}">
+    <label>Proposed confirmed threshold <input type="number" name="high" step="0.01" min="0" max="1" value="{{ high }}"></label>
+    <label>Proposed probable threshold <input type="number" name="low" step="0.01" min="0" max="1" value="{{ low }}"></label>
+    <button type="submit">Try these</button>
+  </form>
+
+  {% if not valid %}
+    <div class="banner error small">The probable threshold must be below the confirmed threshold.</div>
+  {% else %}
+    <table class="grid" data-dt="off">
+      <thead><tr><th></th><th>Confirmed</th><th>Probable</th><th>Unknown</th></tr></thead>
+      <tbody>
+        <tr><td>Current thresholds</td><td>{{ current.confirmed }}</td><td>{{ current.probable }}</td><td>{{ current.unknown }}</td></tr>
+        <tr><td><b>Proposed</b></td><td><b>{{ proposed.confirmed }}</b></td><td><b>{{ proposed.probable }}</b></td><td><b>{{ proposed.unknown }}</b></td></tr>
+      </tbody>
+    </table>
+  {% endif %}
+
+  {% if known_errors %}
+    <div class="banner {% if errors_above_high %}error{% else %}ok{% endif %} small">
+      Highest score behind a confirmed-wrong identification: <b>{{ known_errors.0 }}</b>.
+      {% if errors_above_high %}
+        {{ errors_above_high|length }} wrong identification(s) would still be presented as
+        <b>confirmed</b> at {{ high }}. A confirmed threshold of at least
+        <b>{{ suggested_high }}</b> would have marked them all as probable or lower.
+      {% else %}
+        At {{ high }}, every known wrong identification falls below "confirmed".
+      {% endif %}
+      Raising the threshold also demotes some correct matches - check the proposed
+      row above before applying.
+    </div>
+  {% else %}
+    <p class="muted small">No accepted corrections in this window yet, so there are no
+       labelled errors to tune against. Work the correction queue during the pilot:
+       it is the error data this tuner needs.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Cameras</h2>
+  <p class="muted small">Gate rate is the share of detected faces the quality gate
+     rejected. Above 50%, the camera is badly placed: move it rather than tune.</p>
+  <table class="grid">
+    <thead><tr><th>Camera</th><th>Zone</th><th>Purpose</th><th>Decisions</th><th>Confirmed</th>
+               <th>Probable</th><th>Unknown</th><th>Gate rate</th><th>Advice</th></tr></thead>
+    <tbody>
+      {% for c in cameras %}
+        <tr {% if c.advice %}class="warn-row"{% endif %}>
+          <td><a href="{% url 'cameras:detail' c.camera.code %}">{{ c.camera.code }}</a></td>
+          <td class="small">{{ c.camera.zone.name }}</td>
+          <td class="small">{{ c.camera.get_purpose_display|truncatechars:20 }}</td>
+          <td>{{ c.total }}</td>
+          <td>{{ c.confirmed }}</td>
+          <td>{{ c.probable }}</td>
+          <td>{{ c.unknown }}</td>
+          <td>{% if c.gate_rate is not None %}{% widthratio c.gate_rate 1 100 %}%{% else %}<span class="muted">-</span>{% endif %}</td>
+          <td class="small">{% for a in c.advice %}<div class="warnc">{{ a }}</div>{% empty %}<span class="ok">ok</span>{% endfor %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="9" class="muted">No cameras.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Zones</h2>
+  <p class="muted small">Corrections are "that was not me" reports reviewers accepted;
+     implausible arrivals are movements the zone graph says could not happen.</p>
+  <table class="grid">
+    <thead><tr><th>Zone</th><th>Stays</th><th>Arrivals</th><th>Implausible</th>
+               <th>Wrong IDs (accepted)</th><th>Reports open</th><th>Advice</th></tr></thead>
+    <tbody>
+      {% for z in zones %}
+        <tr>
+          <td>{{ z.zone.name }}</td>
+          <td>{{ z.intervals }}</td>
+          <td>{{ z.movements }}</td>
+          <td>{{ z.implausible }}{% if z.implausible_rate %} <span class="muted small">({% widthratio z.implausible_rate 1 100 %}%)</span>{% endif %}</td>
+          <td>{{ z.corrections_accepted }}{% if z.correction_rate %} <span class="muted small">({% widthratio z.correction_rate 1 100 %}%)</span>{% endif %}</td>
+          <td>{{ z.corrections_open }}</td>
+          <td class="small">{% for a in z.advice %}<div class="warnc">{{ a }}</div>{% empty %}<span class="ok">ok</span>{% endfor %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="7" class="muted">No presence recorded in this window.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>Measuring properly</h2>
+  <p class="small">This page tunes against what the live system has seen. For a
+     controlled number, run the offline benchmark against a labelled photo set
+     (see <code>docs/PILOT_RUNBOOK.md</code>):</p>
+  <pre class="code-block">make benchmark data=/samples/benchmark</pre>
+</section>
+{% endblock %}

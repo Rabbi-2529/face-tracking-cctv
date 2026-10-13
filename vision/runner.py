@@ -406,7 +406,10 @@ class CameraWorker:
             face_width_px=max(1, track.bbox[2] - track.bbox[0]),
             quality_score=track.best_quality,
             employee_code=track.decided_employee,
-            match_score=track.decided_score if track.decided_employee else None,
+            # Sent for unknown faces too: the best gallery similarity, with no
+            # name attached. Threshold tuning needs the scores that fell
+            # *below* the line as much as the ones above it.
+            match_score=track.decided_score,
             confidence=track.decided_confidence,
             snapshot_key=snapshot_key,
             embedding=embedding,

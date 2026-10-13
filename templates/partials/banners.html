@@ -1,0 +1,21 @@
+{% if needs_mfa_enrolment %}
+  <div class="banner warn">
+    Your role requires an authenticator app. Gated features stay unavailable
+    until you <a href="{% url 'accounts:mfa_setup' %}">enrol one</a>.
+  </div>
+{% endif %}
+{% if needs_mfa_verification %}
+  <div class="banner warn">
+    This session is not verified yet. <a href="{% url 'accounts:mfa_verify' %}?next={{ request.path|urlencode }}">Enter your authenticator code</a>
+    to use gated features.
+  </div>
+{% endif %}
+{% if user.must_change_password %}
+  <div class="banner warn">
+    You are using a temporary password.
+    <a href="{% url 'accounts:password_change' %}">Change it now</a>.
+  </div>
+{% endif %}
+{% for message in messages %}
+  <div class="banner {{ message.tags }}">{{ message }}</div>
+{% endfor %}

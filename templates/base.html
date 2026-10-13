@@ -3,92 +3,135 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}CCTV Tracking{% endblock %}</title>
+  <title>{% block title %}CCTV Tracking{% endblock %} &middot; CCTV Tracking</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.dataTables.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  <link rel="stylesheet" href="{% static 'css/theme.css' %}">
+  {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% if user.is_authenticated %}shell{% else %}public{% endif %}">
 {% if user.is_authenticated %}
-<header class="topbar">
-  <a class="brand" href="{% url 'tracking:dashboard' %}">CCTV Tracking</a>
-  <nav>
-    {% if 'live.view_all' in granted_actions or 'live.view_assigned' in granted_actions %}
-      <a href="{% url 'tracking:live_board' %}">Live</a>
+<div class="app">
+  <aside class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="{% url 'tracking:dashboard' %}">
+      <span class="brand-mark">{% include "partials/icon.html" with name="eye" %}</span>
+      <span class="brand-name">CCTV Tracking<span class="brand-sub">Movement &amp; access</span></span>
+    </a>
+
+    <div class="nav-group">
+      <div class="nav-label">Monitor</div>
+      <a class="nav-link" href="{% url 'tracking:dashboard' %}">{% include "partials/icon.html" with name="dashboard" %}Dashboard</a>
+      {% if 'live.view_all' in granted_actions or 'live.view_assigned' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:live_board' %}">{% include "partials/icon.html" with name="live" %}Live board</a>
+      {% endif %}
+      {% if 'alert.ack' in granted_actions %}
+        <a class="nav-link" href="{% url 'alerts:inbox' %}">{% include "partials/icon.html" with name="alerts" %}Alerts</a>
+      {% endif %}
+      {% if 'history.any' in granted_actions or 'history.department' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:zone_search' %}">{% include "partials/icon.html" with name="search" %}Zone search</a>
+      {% endif %}
+    </div>
+
+    {% if 'employee.view' in granted_actions or 'trackrequest.create' in granted_actions or 'trackrequest.approve' in granted_actions or 'history.any' in granted_actions %}
+    <div class="nav-group">
+      <div class="nav-label">People</div>
+      {% if 'employee.view' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:employee_list' %}">{% include "partials/icon.html" with name="employees" %}Employees</a>
+      {% endif %}
+      {% if 'trackrequest.create' in granted_actions or 'trackrequest.approve' in granted_actions %}
+        <a class="nav-link" href="{% url 'watchlist:list' %}">{% include "partials/icon.html" with name="requests" %}Tracking requests</a>
+      {% endif %}
+      {% if 'history.any' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:movement_review' %}" data-match="/review/">{% include "partials/icon.html" with name="review" %}Review queues</a>
+      {% endif %}
+    </div>
     {% endif %}
-    {% if 'history.any' in granted_actions or 'history.department' in granted_actions %}
-      <a href="{% url 'tracking:zone_search' %}">Zone search</a>
+
+    {% if 'report.aggregate_view' in granted_actions or 'audit.read_all' in granted_actions or 'audit.read_own' in granted_actions or 'pipeline.view' in granted_actions %}
+    <div class="nav-group">
+      <div class="nav-label">Insights</div>
+      {% if 'report.aggregate_view' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:reports' %}">{% include "partials/icon.html" with name="reports" %}Reports</a>
+      {% endif %}
+      {% if 'pipeline.view' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:accuracy' %}">{% include "partials/icon.html" with name="accuracy" %}Accuracy</a>
+      {% endif %}
+      {% if 'audit.read_all' in granted_actions or 'audit.read_own' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:audit_log' %}">{% include "partials/icon.html" with name="audit" %}Audit log</a>
+      {% endif %}
+    </div>
     {% endif %}
-    {% if 'employee.view' in granted_actions %}
-      <a href="{% url 'tracking:employee_list' %}">Employees</a>
+
+    {% if 'camera.view' in granted_actions or 'zone.manage' in granted_actions or 'user.manage' in granted_actions or 'pipeline.view' in granted_actions or 'alertrule.manage' in granted_actions %}
+    <div class="nav-group">
+      <div class="nav-label">Configure</div>
+      {% if 'camera.view' in granted_actions %}
+        <a class="nav-link" href="{% url 'cameras:list' %}">{% include "partials/icon.html" with name="cameras" %}Cameras</a>
+      {% endif %}
+      {% if 'zone.manage' in granted_actions %}
+        <a class="nav-link" href="{% url 'org:overview' %}">{% include "partials/icon.html" with name="site" %}Site &amp; zones</a>
+      {% endif %}
+      {% if 'alertrule.manage' in granted_actions %}
+        <a class="nav-link" href="{% url 'alerts:rules' %}">{% include "partials/icon.html" with name="rules" %}Alert rules</a>
+      {% endif %}
+      {% if 'pipeline.view' in granted_actions %}
+        <a class="nav-link" href="{% url 'cameras:pipeline' %}">{% include "partials/icon.html" with name="matching" %}Matching</a>
+      {% endif %}
+      {% if 'user.manage' in granted_actions %}
+        <a class="nav-link" href="{% url 'useradmin:list' %}">{% include "partials/icon.html" with name="users" %}Users &amp; roles</a>
+      {% endif %}
+    </div>
     {% endif %}
-    {% if 'camera.view' in granted_actions %}
-      <a href="{% url 'cameras:list' %}">Cameras</a>
-    {% endif %}
-    {% if 'trackrequest.create' in granted_actions or 'trackrequest.approve' in granted_actions %}
-      <a href="{% url 'watchlist:list' %}">Requests</a>
-    {% endif %}
-    {% if 'history.any' in granted_actions %}
-      <a href="{% url 'tracking:movement_review' %}">Review</a>
-    {% endif %}
-    {% if 'alert.ack' in granted_actions %}
-      <a href="{% url 'alerts:inbox' %}">Alerts</a>
-    {% elif 'alertrule.manage' in granted_actions %}
-      <a href="{% url 'alerts:rules' %}">Alert rules</a>
-    {% endif %}
-    {% if 'report.aggregate_view' in granted_actions %}
-      <a href="{% url 'tracking:reports' %}">Reports</a>
-    {% endif %}
-    {% if 'zone.manage' in granted_actions %}
-      <a href="{% url 'org:overview' %}">Site</a>
-    {% endif %}
-    {% if 'user.manage' in granted_actions %}
-      <a href="{% url 'useradmin:list' %}">Users</a>
-    {% endif %}
-    {% if 'pipeline.view' in granted_actions %}
-      <a href="{% url 'cameras:pipeline' %}">Matching</a>
-    {% endif %}
-    {% if 'audit.read_all' in granted_actions or 'audit.read_own' in granted_actions %}
-      <a href="{% url 'tracking:audit_log' %}">Audit</a>
-    {% endif %}
-  </nav>
-  <div class="user">
-    <span class="role-chip">{{ role_label }}</span>
-    <a href="{% url 'accounts:my_account' %}">{{ user.email }}</a>
-    <form method="post" action="{% url 'accounts:logout' %}" class="inline">
-      {% csrf_token %}<button type="submit" class="linkish">Sign out</button>
-    </form>
-  </div>
-</header>
+
+    <div class="nav-group">
+      <div class="nav-label">You</div>
+      <a class="nav-link" href="{% url 'accounts:my_account' %}">{% include "partials/icon.html" with name="account" %}My account</a>
+    </div>
+
+    <div class="sidebar-foot">Every view of identity data is logged.</div>
+  </aside>
+  <div class="scrim"></div>
+
+  <div class="main-col">
+    <header class="topbar">
+      <button type="button" class="menu-toggle icon-btn" aria-label="Open menu">{% include "partials/icon.html" with name="menu" %}</button>
+      <div class="crumb">CCTV Tracking / <b id="crumb-page">{% block crumb %}{% endblock %}</b></div>
+      <div class="spacer"></div>
+      <div class="user">
+        <span class="role-chip">{{ role_label }}</span>
+        <a class="email" href="{% url 'accounts:my_account' %}">{{ user.email }}</a>
+        <span class="avatar" aria-hidden="true">{{ user.email|slice:":1"|upper }}</span>
+        <form method="post" action="{% url 'accounts:logout' %}" class="inline">
+          {% csrf_token %}
+          <button type="submit" class="icon-btn" title="Sign out" aria-label="Sign out">{% include "partials/icon.html" with name="logout" %}</button>
+        </form>
+      </div>
+    </header>
 {% endif %}
 
-<main>
-  {% if needs_mfa_enrolment %}
-    <div class="banner warn">
-      Your role requires an authenticator app. Gated features stay unavailable
-      until you <a href="{% url 'accounts:mfa_setup' %}">enrol one</a>.
-    </div>
-  {% endif %}
-  {% if needs_mfa_verification %}
-    <div class="banner warn">
-      This session is not verified yet. <a href="{% url 'accounts:mfa_verify' %}?next={{ request.path|urlencode }}">Enter your authenticator code</a>
-      to use gated features.
-    </div>
-  {% endif %}
-  {% if user.must_change_password %}
-    <div class="banner warn">
-      You are using a temporary password.
-      <a href="{% url 'accounts:password_change' %}">Change it now</a>.
-    </div>
-  {% endif %}
-  {% for message in messages %}
-    <div class="banner {{ message.tags }}">{{ message }}</div>
-  {% endfor %}
-  {% block content %}{% endblock %}
-</main>
+    <main>
+      {% include "partials/banners.html" %}
+      {% block content %}{% endblock %}
+    </main>
 
-<footer class="footnote">
-  Movement records are produced by automated face recognition and can be wrong.
-  They are a lead, never sole evidence. Every view of this data is logged.
-</footer>
+{% if user.is_authenticated %}
+    <footer class="footnote">
+      Movement records are produced by automated face recognition and can be wrong.
+      They are a lead, never sole evidence. Every view of this data is logged.
+    </footer>
+  </div>
+</div>
+{% endif %}
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+<script src="{% static 'js/app.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>
 </html>

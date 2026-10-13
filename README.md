@@ -7,15 +7,14 @@ Operator, Auditor and Employee roles.
 
 Full design, roadmap and compliance requirements: [CCTV_TRACKING_PLAN.md](CCTV_TRACKING_PLAN.md)
 
-**Status: Phase 5 complete.** Foundation and access control (Phase 1), face
-pipeline and enrolment (Phase 2), the multi-camera pipeline (Phase 3), the
-interfaces (Phase 4), and governance and hardening (Phase 5) - MFA verified
-at every sign-in and on every WebSocket, tracking requests limited to their
-approved data window, live follow ended the moment an approval does, the
-alert engine and inbox, complete retention, and employee self-service - all
-run and are tested. `MOCK_VISION=1` exercises the realtime path with
-synthetic movement when no cameras are available. Next is Phase 6, the pilot;
-see the end of this file.
+**Status: Phases 1-5 complete; Phase 6 (pilot) tooling built.** Foundation
+and access control, the face pipeline and enrolment, the multi-camera
+pipeline, the interfaces, and governance (MFA on every sign-in and socket,
+data-windowed tracking requests, alerts, retention, self-service) all run and
+are tested. For the pilot there is now an Accuracy page with a threshold
+what-if, an offline accuracy benchmark, an aggregator load test and a pilot
+runbook - see the end of this file. `MOCK_VISION=1` exercises the realtime
+path with synthetic movement when no cameras are available.
 
 ---
 
@@ -345,15 +344,33 @@ their consent, their own enrolled face images, and every tracking request
 about them that has not been formally suppressed. Developers in production
 can request break-glass access there; a Super Admin approves it.
 
-## Next: Phase 6 - pilot and tuning
+## Interface
 
-This is operational work rather than code:
+An admin-panel layout: a sidebar that shows only what the signed-in role may
+use, white surfaces, black text, and one brand colour (`#c9f73a`) on every
+button and active state. Three widgets are applied to plain HTML by
+`static/js/app.js`, themed in `static/css/theme.css`:
 
-- One floor, real users, real cameras. Run `make audit` first.
-- **Measure accuracy against a labelled set** and tune `PipelineConfig`
-  thresholds from it. The published defaults will not transfer to your estate.
-- Work the correction and review queues daily for the first weeks: they are
-  the error data that tuning needs.
-- Reposition cameras the audit or the gate rate flags.
-- Load test with the real camera count before rolling out further.
-- Turn on `MFA_ENFORCED=1` once every privileged user has enrolled.
+- **DataTables** on every `table.grid` - sorting, filtering, paging. Pages the
+  server already paginates get filter and sort only (`data-dt-paging="off"`);
+  `data-dt="off"` opts a table out.
+- **Select2** on every `<select>` (`data-no-select2` opts out).
+- **flatpickr** calendar on every date, date-time and time input
+  (`data-no-picker` opts out); values submit in the same format as before.
+
+The libraries load from cdnjs / the DataTables CDN at pinned versions. If the
+application server has no internet route (as the camera VLAN should not),
+download those files into `static/vendor/` and point `base.html` at them.
+
+## Phase 6 - pilot and tuning
+
+Follow **[docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md)**: one floor, four
+weeks, a go / no-go decision on measured numbers. The tools it uses:
+
+| Tool | What it answers |
+|---|---|
+| `/accuracy/` (Developer, Admin) | Per camera: gate rate, probable share, capability. Per zone: accepted wrong IDs, implausible arrivals. A **threshold what-if** over real match scores, next to the highest score of any identification reviewers confirmed was wrong. |
+| `make benchmark data=/samples/benchmark` | Accuracy against a labelled photo set from your own cameras: TAR/FAR, recommended thresholds, and pass/fail against the plan's targets (>= 95% correct, <= 2% confirmed-wrong). |
+| `make loadtest cams=20 fps=4 secs=60` | Whether the aggregator keeps up at the rollout camera count. Synthetic unknown-face events only; cleaned up afterwards. |
+
+Turn on `MFA_ENFORCED=1` once every privileged user has enrolled.

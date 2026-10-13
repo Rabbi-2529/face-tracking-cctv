@@ -1,0 +1,10 @@
+# Keep LF in the repository and in checkouts. The project's files are mounted
+# into Linux containers; a CRLF entrypoint.sh fails there with
+# "bad interpreter" even though it looks fine on Windows.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp4 binary
+*.onnx binary

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.tracking import report_views, review_views, views
+from apps.tracking import accuracy_views, report_views, review_views, views
 
 app_name = "tracking"
 
@@ -48,6 +48,8 @@ urlpatterns = [
         review_views.UnknownFaceResolveView.as_view(),
         name="unknown_resolve",
     ),
+    # Pilot instrumentation: per-camera quality and the threshold what-if.
+    path("accuracy/", accuracy_views.AccuracyView.as_view(), name="accuracy"),
     # Reports and exports.
     path("reports/", report_views.ReportView.as_view(), name="reports"),
     path(

@@ -9,7 +9,7 @@ GPU := docker compose -f docker-compose.yml -f docker-compose.gpu.yml
 .DEFAULT_GOAL := help
 .PHONY: help init up down restart logs ps build rebuild migrate makemigrations \
         seed demo shell dbshell superuser test lint fmt mock mock-stop \
-        vision vision-gpu audit health reset lock
+        vision vision-gpu audit benchmark loadtest health reset lock
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -126,6 +126,13 @@ vision-gpu: ## Start the vision workers with CUDA
 audit: ## Camera viability audit. Run this before anything else. make audit secs=120
 	$(COMPOSE) --profile vision run --rm vision \
 	  python scripts/camera_audit.py --seconds $${secs:-60} --save
+
+benchmark: ## Accuracy against a labelled set. make benchmark data=/samples/benchmark
+	$(COMPOSE) --profile vision run --rm vision 	  python scripts/benchmark_accuracy.py --data $${data:-/samples/benchmark} --json /samples/benchmark-result.json
+
+loadtest: ## Aggregator throughput. make loadtest cams=20 fps=4 secs=60 (never on production)
+	$(COMPOSE) --profile vision run --rm vision 	  python scripts/load_test.py --cameras $${cams:-10} --fps $${fps:-4} --seconds $${secs:-30} --not-production
+	$(COMPOSE) exec web python manage.py purge_load_test
 
 # ------------------------------------------------------------------- quality
 
