@@ -12,9 +12,13 @@ from apps.common.roles import MFA_REQUIRED_ROLES, Role
 
 
 def role_context(request) -> dict:
+    from django.conf import settings
+
+    assets_local = getattr(settings, "ASSETS_LOCAL", False)
     user = getattr(request, "user", None)
     if user is None or not user.is_authenticated:
         return {
+            "assets_local": assets_local,
             "granted_actions": frozenset(),
             "role_label": "",
             "needs_mfa_enrolment": False,
@@ -24,6 +28,7 @@ def role_context(request) -> dict:
     has_mfa = user.has_confirmed_mfa
     verified = getattr(user, "is_verified", None)
     return {
+        "assets_local": assets_local,
         "granted_actions": PermissionService.granted_actions(user),
         "role_label": Role(user.role).label if user.role else "",
         # Drives the "enrol an authenticator" banner for roles that require it.

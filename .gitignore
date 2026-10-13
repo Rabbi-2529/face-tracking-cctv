@@ -29,3 +29,5 @@ docker-compose.yml.bak
 *.swp
 Thumbs.db
 desktop.ini
+
+backups/

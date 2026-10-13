@@ -9,7 +9,7 @@ GPU := docker compose -f docker-compose.yml -f docker-compose.gpu.yml
 .DEFAULT_GOAL := help
 .PHONY: help init up down restart logs ps build rebuild migrate makemigrations \
         seed demo shell dbshell superuser test lint fmt mock mock-stop \
-        vision vision-gpu audit benchmark loadtest pilot-check health reset lock
+        vision vision-gpu audit benchmark loadtest pilot-check backup restore restore-test golive-check health reset lock
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -136,6 +136,18 @@ pilot-check: ## Pilot readiness checklist against live data
 loadtest: ## Aggregator throughput. make loadtest cams=20 fps=4 secs=60 (never on production)
 	$(COMPOSE) --profile vision run --rm vision python scripts/load_test.py --cameras $${cams:-10} --fps $${fps:-4} --seconds $${secs:-30} --not-production
 	$(COMPOSE) exec web python manage.py purge_load_test
+
+backup: ## Dump the database to ./backups (encrypted if BACKUP_PASSPHRASE is set), prune old dumps
+	sh scripts/backup.sh backup
+
+restore-test: ## Prove a backup restores: make restore-test file=backups/cctv-....dump (latest if omitted)
+	sh scripts/backup.sh restore-test $${file:-$$(sh scripts/backup.sh latest)}
+
+restore: ## DESTRUCTIVE. Replace the live database: make restore file=backups/cctv-....dump
+	sh scripts/backup.sh restore $(file)
+
+golive-check: ## Production readiness audit of settings, accounts and backups
+	$(COMPOSE) exec web python manage.py golive_check
 
 # ------------------------------------------------------------------- quality
 

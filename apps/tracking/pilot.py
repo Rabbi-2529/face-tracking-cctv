@@ -38,12 +38,15 @@ def _names(items, limit: int = 5) -> str:
     return shown + (f" and {len(items) - limit} more" if len(items) > limit else "")
 
 
-def check_site() -> list[Check]:
+def check_site(floor=None) -> list[Check]:
     from apps.org.models import Floor, Zone, ZoneAdjacency
     from apps.org.plans import valid_polygon
 
     checks = []
-    zones = list(Zone.objects.alive().select_related("floor"))
+    zones = Zone.objects.alive().select_related("floor")
+    if floor is not None:
+        zones = zones.filter(floor=floor)
+    zones = list(zones)
     trackable = [z for z in zones if not z.tracking_prohibited]
 
     if not any(z.tracking_prohibited for z in zones):
@@ -65,7 +68,7 @@ def check_site() -> list[Check]:
         "Add the doors under Site & zones; unconnected zones flag every arrival as impossible." if orphans else "",
     ))
 
-    floors = list(Floor.objects.all())
+    floors = [floor] if floor is not None else list(Floor.objects.all())
     without_plan = [str(f) for f in floors if not f.plan_image]
     unoutlined = [z.name for z in trackable if z.floor.plan_image and valid_polygon(z.plan_polygon) is None]
     if without_plan or unoutlined:
@@ -81,13 +84,14 @@ def check_site() -> list[Check]:
     return checks
 
 
-def check_cameras() -> list[Check]:
+def check_cameras(floor=None) -> list[Check]:
     from apps.cameras.models import Camera, CameraAuditResult
 
     checks = []
-    cameras = list(
-        Camera.objects.alive().filter(is_enabled=True, zone__tracking_prohibited=False).select_related("zone")
-    )
+    cameras = Camera.objects.alive().filter(is_enabled=True, zone__tracking_prohibited=False).select_related("zone")
+    if floor is not None:
+        cameras = cameras.filter(zone__floor=floor)
+    cameras = list(cameras)
     identity = [c for c in cameras if c.purpose == Camera.Purpose.IDENTITY]
     if not identity:
         checks.append(Check("Cameras", "Identity cameras", FAIL, "No enabled identity camera.",
@@ -240,8 +244,9 @@ def check_governance() -> list[Check]:
     return checks
 
 
-def pilot_readiness() -> dict:
-    checks = check_site() + check_cameras() + check_people() + check_governance()
+def pilot_readiness(floor=None) -> dict:
+    """``floor`` limits the site and camera checks to one floor, for wave-by-wave rollout."""
+    checks = check_site(floor) + check_cameras(floor) + check_people() + check_governance()
     counts = {s: sum(1 for c in checks if c.status == s) for s in (PASS, WARN, FAIL)}
     return {
         "checks": checks,

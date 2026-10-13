@@ -34,6 +34,8 @@ x-django-env: &django-env
   S3_BUCKET: ${S3_BUCKET:-cctv-snapshots}
   ENVIRONMENT: ${ENVIRONMENT:-production}
   MFA_ENFORCED: ${MFA_ENFORCED:-0}
+  # 1 = serve page libraries from static/vendor/ (no internet needed).
+  ASSETS_LOCAL: ${ASSETS_LOCAL:-0}
   FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?set FIELD_ENCRYPTION_KEY in .env}
   SNAPSHOT_URL_TTL_SECONDS: ${SNAPSHOT_URL_TTL_SECONDS:-180}
   MODEL_DIR: /models

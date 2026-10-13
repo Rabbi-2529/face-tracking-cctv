@@ -14,6 +14,7 @@ reaching a model this panel does not cover yet.
 from django.conf import settings
 from django.urls import include, path
 
+from apps.common.help import HelpView
 from apps.common.views import healthz, readyz
 
 urlpatterns = [
@@ -21,6 +22,7 @@ urlpatterns = [
     path("healthz/", healthz, name="healthz"),
     path("readyz/", readyz, name="readyz"),
     path("accounts/", include("apps.accounts.urls")),
+    path("help/", HelpView.as_view(), name="help"),
     path("api/v1/", include("apps.api.urls")),
     # Each of these is its own top-level namespace so templates can reverse
     # `watchlist:list`, `cameras:list` and so on.

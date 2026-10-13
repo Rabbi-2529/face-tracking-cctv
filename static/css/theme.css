@@ -681,3 +681,21 @@ input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospa
 .switch.toggle input:focus-visible + .track { box-shadow: 0 0 0 3px var(--brand-ring); }
 .section-head > div { min-width: 0; }
 .section-head .hint { margin-top: 1px; }
+
+/* Help & training */
+.help-rules ol { margin: 4px 0 0; padding-left: 20px; }
+.help-rules li { margin: 6px 0; }
+.help-guide { padding: 0; }
+.help-guide > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 12px 16px; border-radius: var(--radius);
+}
+.help-guide > summary::-webkit-details-marker { display: none; }
+.help-guide > summary::before { content: "+"; font-weight: 800; width: 14px; color: var(--brand-deep); }
+.help-guide[open] > summary::before { content: "\2212"; }
+.help-guide[open] > summary { border-bottom: 1px solid var(--line); border-radius: var(--radius) var(--radius) 0 0; }
+.help-role { font-weight: 750; font-size: 15px; }
+.help-body { padding: 4px 16px 14px; }
+.help-body h3 { margin: 12px 0 4px; font-size: 14px; }
+ol.help-steps { margin: 0; padding-left: 20px; }
+ol.help-steps li { margin: 5px 0; line-height: 1.5; }

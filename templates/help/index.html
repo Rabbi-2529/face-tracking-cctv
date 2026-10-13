@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Help &amp; training{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Help &amp; training</h1>
+    <p class="muted">How to use the system for each role. Yours is open first; the others are there so you know what colleagues can and cannot do.</p>
+  </div>
+</div>
+
+<section class="card help-rules">
+  <h2>Three rules for everyone</h2>
+  <ol>
+    <li><b>A match is a lead, never proof.</b> Face recognition is sometimes wrong. A "probable" match is a guess; even a "confirmed" one should be checked against the evidence image before anyone acts on it.</li>
+    <li><b>Everything you look at is recorded.</b> Opening a timeline, an evidence image or an export writes your name to the audit log. That protects the people being tracked - and you.</li>
+    <li><b>Following a named person needs a reason and someone else's approval.</b> Use a tracking request. "Who was in this room" questions (zone search) need no approval and answer most investigations.</li>
+  </ol>
+</section>
+
+{% for guide in guides %}
+<details class="card help-guide" {% if guide.role == current_role %}open{% endif %} id="role-{{ guide.role }}">
+  <summary>
+    <span class="help-role">{{ guide.label }}</span>
+    {% if guide.role == current_role %}<span class="chk chk-pass">YOUR ROLE</span>{% endif %}
+    <span class="muted small">{{ guide.summary }}</span>
+  </summary>
+  <div class="help-body">
+    {% for section in guide.sections %}
+      <h3>{{ section.title }}</h3>
+      <ol class="help-steps">
+        {% for step in section.steps %}<li>{{ step|safe }}</li>{% endfor %}
+      </ol>
+    {% endfor %}
+    {% if guide.cannot %}
+      <p class="small muted"><b>This role cannot:</b> {{ guide.cannot }}</p>
+    {% endif %}
+  </div>
+</details>
+{% endfor %}
+
+<section class="card">
+  <h2>Getting help</h2>
+  <p class="small">Locked out, lost your authenticator and backup codes, or need access you do not have? Ask a Super Admin. If a record about you is wrong, report it from your timeline - you have a right to have it corrected.</p>
+</section>
+{% endblock %}

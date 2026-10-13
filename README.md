@@ -7,14 +7,23 @@ Operator, Auditor and Employee roles.
 
 Full design, roadmap and compliance requirements: [CCTV_TRACKING_PLAN.md](CCTV_TRACKING_PLAN.md)
 
-**Status: Phases 1-5 complete; Phase 6 (pilot) tooling built.** Foundation
-and access control, the face pipeline and enrolment, the multi-camera
-pipeline, the interfaces, and governance (MFA on every sign-in and socket,
-data-windowed tracking requests, alerts, retention, self-service) all run and
-are tested. For the pilot there is now an Accuracy page with a threshold
-what-if, an offline accuracy benchmark, an aggregator load test and a pilot
-runbook - see the end of this file. `MOCK_VISION=1` exercises the realtime
-path with synthetic movement when no cameras are available.
+**Status: Phases 1-5 complete. Phase 6 (pilot) and Phase 7 (rollout) tooling
+built and rehearsed; the on-site pilot and the rollout waves are next.**
+Foundation and access control, the face pipeline, the multi-camera pipeline,
+the interfaces and governance all run and are tested. For the pilot and
+rollout there are readiness and go-live checks, an accuracy benchmark, a load
+test, backups with restore testing, in-app role training, and the operating
+documents listed below. `MOCK_VISION=1` exercises the realtime path with
+synthetic movement when no cameras are available.
+
+| Document | For |
+|---|---|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Installing and updating production |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Daily running, incidents, privacy requests |
+| [docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md) / [PILOT_LOG.md](docs/PILOT_LOG.md) | Running the pilot, measured results |
+| [docs/ROLLOUT_PLAN.md](docs/ROLLOUT_PLAN.md) | Floor-by-floor rollout |
+| [docs/HANDOVER.md](docs/HANDOVER.md) | Architecture, ownership, open items |
+| **Help & training** (in the app) | Every user, per role |
 
 ---
 

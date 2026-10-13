@@ -1,0 +1,42 @@
+{
+  "jquery/jquery.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js",
+    "sha256": "fc9a93dd241f6b045cbff0481cf4e1901becd0e12fb45166a8f17f95823f0b1a",
+    "bytes": 87533
+  },
+  "datatables/dataTables.min.js": {
+    "url": "https://cdn.datatables.net/2.1.8/js/dataTables.min.js",
+    "sha256": "69306f7b554a5a8ce68e8f4d6f613bdd1bcfe2df313962e7fc83cf5f6be5e085",
+    "bytes": 93477
+  },
+  "datatables/dataTables.dataTables.min.css": {
+    "url": "https://cdn.datatables.net/2.1.8/css/dataTables.dataTables.min.css",
+    "sha256": "10587c5eacd75926baec92990840987da4a8fb66b91c8c43ac955e7b174f21b0",
+    "bytes": 26723
+  },
+  "select2/select2.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js",
+    "sha256": "f7244fff610595b944f76bf3080d74e3af42b5dd234f8f079e698cc39ac966b0",
+    "bytes": 73163
+  },
+  "select2/select2.min.css": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css",
+    "sha256": "cda4a81c187015d95ed2c71f1841540b08203cdec5fa2a7d5d1825a3c2166f8c",
+    "bytes": 16264
+  },
+  "flatpickr/flatpickr.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js",
+    "sha256": "1eeab1cb779471a0b0aaa93dd91c2eb1aa537d696f01ab05ea9dabc55e8525a1",
+    "bytes": 50679
+  },
+  "flatpickr/flatpickr.min.css": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css",
+    "sha256": "1b34a42552c96f10e4dfaaa4a367276b03868aacff63c1ac42ffe331352bc754",
+    "bytes": 16166
+  },
+  "qrcodejs/qrcode.min.js": {
+    "url": "https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js",
+    "sha256": "c541ef06327885a8415bca8df6071e14189b4855336def4f36db54bde8484f36",
+    "bytes": 19927
+  }
+}

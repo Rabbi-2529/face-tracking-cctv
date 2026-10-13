@@ -4,11 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CCTV Tracking{% endblock %} &middot; CCTV Tracking</title>
+  {% if assets_local %}
+  <link rel="stylesheet" href="{% static 'vendor/datatables/dataTables.dataTables.min.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/select2/select2.min.css' %}">
+  <link rel="stylesheet" href="{% static 'vendor/flatpickr/flatpickr.min.css' %}">
+  {% else %}
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.dataTables.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/css/select2.min.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.css">
+  {% endif %}
   <link rel="stylesheet" href="{% static 'css/app.css' %}">
   <link rel="stylesheet" href="{% static 'css/theme.css' %}">
   {% block head %}{% endblock %}
@@ -91,6 +97,7 @@
     <div class="nav-group">
       <div class="nav-label">You</div>
       <a class="nav-link" href="{% url 'accounts:my_account' %}">{% include "partials/icon.html" with name="account" %}My account</a>
+      <a class="nav-link" href="{% url 'help' %}">{% include "partials/icon.html" with name="help" %}Help &amp; training</a>
     </div>
 
     <div class="sidebar-foot">Every view of identity data is logged.</div>
@@ -128,10 +135,17 @@
 </div>
 {% endif %}
 
+{% if assets_local %}
+<script src="{% static 'vendor/jquery/jquery.min.js' %}"></script>
+<script src="{% static 'vendor/datatables/dataTables.min.js' %}"></script>
+<script src="{% static 'vendor/select2/select2.min.js' %}"></script>
+<script src="{% static 'vendor/flatpickr/flatpickr.min.js' %}"></script>
+{% else %}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
 <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.1.0-rc.0/js/select2.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/flatpickr/4.6.13/flatpickr.min.js"></script>
+{% endif %}
 <script src="{% static 'js/app.js' %}"></script>
 {% block scripts %}{% endblock %}
 </body>

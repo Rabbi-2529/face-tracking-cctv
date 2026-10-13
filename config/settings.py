@@ -46,6 +46,14 @@ ENVIRONMENT = env("ENVIRONMENT", default="development" if DEBUG else "production
 # enabled to reach something the panel does not cover yet.
 DJANGO_ADMIN_ENABLED = env.bool("DJANGO_ADMIN_ENABLED", default=False)
 
+# Serve the page libraries (jQuery, DataTables, Select2, flatpickr) from
+# static/vendor/ instead of public CDNs. Needed when the server has no
+# internet route; fetch them once with scripts/vendor_assets.py.
+ASSETS_LOCAL = env.bool("ASSETS_LOCAL", default=False)
+
+# Where `make backup` writes dumps; read by the go-live check.
+BACKUP_DIR = BASE_DIR / "backups"
+
 ALLOWED_HOSTS = env("DJANGO_ALLOWED_HOSTS")
 CSRF_TRUSTED_ORIGINS = env("DJANGO_CSRF_TRUSTED_ORIGINS")
 
