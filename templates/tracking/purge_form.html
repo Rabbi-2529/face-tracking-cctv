@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Request a purge{% endblock %}
+{% block content %}
+<form method="post" novalidate>
+  {% csrf_token %}
+  <div class="page-head">
+    <div>
+      <h1>Request a purge</h1>
+      <p class="muted">Nothing is deleted when you submit. A different Super Admin must approve within 7 days.</p>
+    </div>
+    <div class="head-actions">
+      <a class="button ghost" href="{% url 'tracking:purge_list' %}">Cancel</a>
+    </div>
+  </div>
+
+  {% if form.non_field_errors %}<div class="banner error">{{ form.non_field_errors|join:" " }}</div>{% endif %}
+
+  <div class="form-layout">
+    <div class="form-main">
+      <section class="card form-section">
+        <div class="section-head"><span class="step">1</span><div><h2>Scope</h2><div class="hint">One person, a date range, or both.</div></div></div>
+        <div class="form-grid cols-3">
+          {% include "partials/field.html" with f=form.employee %}
+          {% include "partials/field.html" with f=form.date_from %}
+          {% include "partials/field.html" with f=form.date_to %}
+        </div>
+      </section>
+
+      <section class="card form-section">
+        <div class="section-head"><span class="step">2</span><div><h2>What to delete</h2><div class="hint">Face templates only for a named person.</div></div></div>
+        <div class="field{% if form.kinds.errors %} has-error{% endif %}">
+          <div class="checkbox-list tall">{{ form.kinds }}</div>
+          {% for e in form.kinds.errors %}<div class="field-error">{{ e }}</div>{% endfor %}
+        </div>
+      </section>
+
+      <section class="card form-section">
+        <div class="section-head"><span class="step">3</span><div><h2>Reason</h2></div></div>
+        <div class="form-grid cols-1">{% include "partials/field.html" with f=form.reason %}</div>
+      </section>
+
+      {% if preview is not None %}
+      <section class="card purge-preview">
+        <h2>This would delete</h2>
+        <table class="grid" data-dt="off">
+          <tbody>
+            {% for label, n in preview.items %}<tr><td>{{ label|capfirst }}</td><td><b>{{ n }}</b></td></tr>
+            {% empty %}<tr><td class="muted">Nothing matches this scope.</td></tr>{% endfor %}
+          </tbody>
+        </table>
+      </section>
+      {% endif %}
+
+      <div class="form-foot">
+        <button type="submit" name="action" value="preview" class="button ghost">Preview</button>
+        <button type="submit" name="action" value="submit">Submit for approval</button>
+      </div>
+    </div>
+
+    <aside class="form-aside">
+      <section class="card">
+        <h2>Never purged</h2>
+        <ul class="checklist small">
+          <li>The audit log - who looked at what</li>
+          <li>Sign-in history</li>
+          <li>Tracking requests and their approvals</li>
+          <li>Consent records</li>
+          <li>Correction reports</li>
+          <li>This purge request itself</li>
+        </ul>
+        <p class="small muted">The record of how data was used must outlive the data.</p>
+      </section>
+      <section class="card">
+        <h2>When to use this</h2>
+        <ul class="checklist small">
+          <li>An employee's erasure request</li>
+          <li>Data captured in error (wrong camera, test footage)</li>
+          <li>A period that must not be kept</li>
+        </ul>
+        <p class="small muted">Everything else leaves through the nightly retention job.</p>
+      </section>
+    </aside>
+  </div>
+</form>
+{% endblock %}

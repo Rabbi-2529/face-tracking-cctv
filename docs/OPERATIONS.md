@@ -121,8 +121,18 @@ Symptoms: camera-down alert; red zone on the live board; camera status
 | "What do you hold about me?" | The employee themselves | **My account**: consent, enrolled photos, requests about them, own timeline |
 | Correct a record | Employee reports; reviewer decides | Timeline &rarr; *Something wrong here?*; **Review queues** &rarr; Corrections |
 | Withdraw consent | HR | Employee &rarr; Consent &rarr; withdraw with a note. Matching stops within ~30 s |
-| Delete my data | HR + Super Admin | Withdraw consent, deactivate face images, mark the employee exited. Presence history ages out under retention |
+| Delete my data | HR + two Super Admins | HR withdraws consent and marks the employee exited; a Super Admin requests a **Data purge** for that person (movement, detections, snapshots, alerts, face templates); a second Super Admin approves |
 | Who looked at my data? | Auditor | **Audit log** filtered by the employee code |
+
+## Early deletion (Data purge)
+
+For erasure requests, data captured in error, or a period that must not be
+kept. **Data purge** (Super Admins): choose a person, a date range or both,
+what to delete, and the reason; *Preview* shows the counts; submit. A
+**different** Super Admin opens the request, checks it, and approves by typing
+DELETE - the data goes immediately. Undecided requests lapse after 7 days. The
+audit log, sign-in history, tracking requests, consent records and
+corrections are never purged.
 
 ## Retention (automatic)
 

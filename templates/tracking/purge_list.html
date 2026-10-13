@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Data purge{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Data purge</h1>
+    <p class="muted">Early, irreversible deletion of tracking data. One Super Admin requests it, a different one approves, and only then is anything deleted. The audit log is never purged.</p>
+  </div>
+  <div class="head-actions">
+    <a class="button" href="{% url 'tracking:purge_create' %}">Request a purge</a>
+  </div>
+</div>
+
+<section class="card">
+  <h2>Awaiting a second approval</h2>
+  <table class="grid" data-dt="off">
+    <thead><tr><th>Requested</th><th>Scope</th><th>What</th><th>By</th><th></th></tr></thead>
+    <tbody>
+      {% for r in pending %}
+        <tr>
+          <td class="small">{{ r.created_at|date:"j M Y H:i" }}</td>
+          <td><b>{{ r.scope_label }}</b></td>
+          <td class="small">{{ r.kind_labels|join:", " }}</td>
+          <td class="small">{{ r.requested_by.email }}</td>
+          <td><a class="button ghost" href="{% url 'tracking:purge_detail' r.uuid %}">{% if r.requested_by_id == user.id %}View{% else %}Review{% endif %}</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">Nothing awaiting approval.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section class="card">
+  <h2>History</h2>
+  <table class="grid">
+    <thead><tr><th>Requested</th><th>Scope</th><th>Status</th><th>Requested by</th><th>Decided by</th><th></th></tr></thead>
+    <tbody>
+      {% for r in decided %}
+        <tr>
+          <td class="small">{{ r.created_at|date:"j M Y" }}</td>
+          <td>{{ r.scope_label }}</td>
+          <td><span class="chk {% if r.status == 'executed' %}chk-fail{% elif r.status == 'rejected' %}chk-warn{% else %}chk-pass{% endif %}">{{ r.get_status_display|upper }}</span></td>
+          <td class="small">{{ r.requested_by.email }}</td>
+          <td class="small">{{ r.decided_by.email|default:"-" }}</td>
+          <td><a href="{% url 'tracking:purge_detail' r.uuid %}">Details</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="muted">No purges yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -213,6 +213,11 @@ def enforce_retention() -> dict[str, int]:
     deleted, _ = LoginEvent.objects.filter(at__lt=audit_cutoff).delete()
     results["login_events_deleted"] = deleted
 
+    # Purge requests nobody approved within a week lapse without deleting anything.
+    from apps.tracking.purge import expire_stale
+
+    results["purge_requests_expired"] = expire_stale()
+
     logger.info("retention enforced: %s", results)
     return results
 

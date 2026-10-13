@@ -70,9 +70,8 @@ docker compose exec web python manage.py pilot_check --floor "<floor>"
    tracked for a room). Workers stop within a minute.
 2. Tell the people on the floor, in writing.
 3. Presence already recorded stays until the automatic retention job removes
-   it. There is no early-purge screen: deleting sooner is a manual database
-   operation, to be approved by the system owner and a second Super Admin and
-   recorded in writing.
+   it. To delete it sooner, use **Data purge** with the floor's date range:
+   one Super Admin requests, a second approves.
 
 ## Capacity as waves add cameras
 

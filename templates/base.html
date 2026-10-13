@@ -73,7 +73,7 @@
     </div>
     {% endif %}
 
-    {% if 'camera.view' in granted_actions or 'zone.manage' in granted_actions or 'user.manage' in granted_actions or 'pipeline.view' in granted_actions or 'alertrule.manage' in granted_actions %}
+    {% if 'camera.view' in granted_actions or 'zone.manage' in granted_actions or 'user.manage' in granted_actions or 'pipeline.view' in granted_actions or 'alertrule.manage' in granted_actions or 'purge.execute' in granted_actions %}
     <div class="nav-group">
       <div class="nav-label">Configure</div>
       {% if 'camera.view' in granted_actions %}
@@ -90,6 +90,9 @@
       {% endif %}
       {% if 'user.manage' in granted_actions %}
         <a class="nav-link" href="{% url 'useradmin:list' %}">{% include "partials/icon.html" with name="users" %}Users &amp; roles</a>
+      {% endif %}
+      {% if 'purge.execute' in granted_actions %}
+        <a class="nav-link" href="{% url 'tracking:purge_list' %}" data-match="/governance/purge/">{% include "partials/icon.html" with name="purge" %}Data purge</a>
       {% endif %}
     </div>
     {% endif %}

@@ -47,6 +47,7 @@ Cameras (RTSP) --> vision workers (one process per camera, GPU)
 | Consent gate for matching | `vision/gallery.py` `GALLERY_SQL` |
 | Alert rules and engine | `apps/alerts/` |
 | Retention | `apps/tracking/tasks.py` `enforce_retention` |
+| Early deletion, two approvers | `apps/tracking/purge.py` |
 | Pilot readiness / go-live checks | `apps/tracking/pilot.py`, `apps/tracking/golive.py` |
 
 `tests/test_permission_matrix.py` is the executable form of the role matrix:
@@ -118,9 +119,6 @@ All in the organisation's secrets manager, never in git (`.env` is ignored).
 - Alerts are delivered in the app only (inbox and live push), not by email
   or SMS.
 - Snapshots are not backed up, by design.
-- There is no on-demand purge screen with dual authorisation (the plan's
-  "delete / purge footage" capability). Data leaves only through the nightly
-  retention job; earlier deletion is a manual, separately approved operation.
 
 ## Open items
 

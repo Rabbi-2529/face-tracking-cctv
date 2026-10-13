@@ -40,6 +40,7 @@ GUIDES = [
                 "Lost authenticator: open the user, <i>Reset authenticator</i>, with a reason. You cannot reset your own.",
                 "Break-glass requests from Developers appear on Users &amp; roles. Approve for the shortest time that works (maximum 4 hours).",
                 "<b>Departments &amp; titles</b>: only you add departments, because they decide which employees each HR user can see.",
+                "<b>Data purge</b>: for an erasure request or data captured in error. Request it with a reason; a <i>different</i> Super Admin must approve (typing DELETE). Nothing is deleted until then, and the audit log is never purged.",
             ]},
             {"title": "Configuration", "steps": [
                 "<b>Cameras</b> &rarr; <i>Add camera</i>: choose the vendor and let the form build the stream address. After saving, use <i>Test connection</i> and check the face size (60 px minimum, 100+ good).",

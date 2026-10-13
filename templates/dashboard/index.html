@@ -42,6 +42,10 @@
     <a class="tile bad-tile" href="{% url 'alerts:inbox' %}"><span class="n">{{ open_alerts }}</span>
       <span class="l">open alerts in your zones</span></a>
   {% endif %}
+  {% if pending_purges %}
+    <a class="tile bad-tile" href="{% url 'tracking:purge_list' %}"><span class="n">{{ pending_purges }}</span>
+      <span class="l">purge requests awaiting your second approval</span></a>
+  {% endif %}
   {% if pending_elevations %}
     <a class="tile warn-tile" href="{% url 'useradmin:list' %}"><span class="n">{{ pending_elevations }}</span>
       <span class="l">break-glass requests awaiting a decision</span></a>

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.tracking import accuracy_views, report_views, review_views, views
+from apps.tracking import accuracy_views, purge_views, report_views, review_views, views
 
 app_name = "tracking"
 
@@ -50,6 +50,14 @@ urlpatterns = [
     ),
     # Pilot instrumentation: per-camera quality and the threshold what-if.
     path("accuracy/", accuracy_views.AccuracyView.as_view(), name="accuracy"),
+    # Early deletion under dual authorisation (Super Admins).
+    path("governance/purge/", purge_views.PurgeListView.as_view(), name="purge_list"),
+    path("governance/purge/new/", purge_views.PurgeCreateView.as_view(), name="purge_create"),
+    path(
+        "governance/purge/<uuid:request_uuid>/",
+        purge_views.PurgeDetailView.as_view(),
+        name="purge_detail",
+    ),
     # Reports and exports.
     path("reports/", report_views.ReportView.as_view(), name="reports"),
     path(

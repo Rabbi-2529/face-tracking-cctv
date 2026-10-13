@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Purge request{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Purge request</h1>
+    <p class="muted">{{ item.scope_label }}</p>
+  </div>
+  <div class="head-actions">
+    <a class="button ghost" href="{% url 'tracking:purge_list' %}">All purges</a>
+  </div>
+</div>
+
+<div class="form-layout">
+  <div class="form-main">
+    <section class="card">
+      <dl class="kv">
+        <dt>Status</dt><dd><b>{{ item.get_status_display }}</b></dd>
+        <dt>Scope</dt><dd>{{ item.scope_label }}</dd>
+        <dt>What</dt><dd>{{ item.kind_labels|join:", " }}</dd>
+        <dt>Reason</dt><dd>{{ item.reason|linebreaksbr }}</dd>
+        <dt>Requested</dt><dd>{{ item.requested_by.email }}, {{ item.created_at|date:"j M Y H:i" }}</dd>
+        {% if item.decided_by %}<dt>Decided</dt><dd>{{ item.decided_by.email }}, {{ item.decided_at|date:"j M Y H:i" }}</dd>{% endif %}
+        {% if item.decision_note %}<dt>Note</dt><dd>{{ item.decision_note|linebreaksbr }}</dd>{% endif %}
+      </dl>
+    </section>
+
+    <section class="card">
+      <h2>{% if item.status == "executed" %}Deleted{% else %}Would delete{% endif %}</h2>
+      <table class="grid" data-dt="off">
+        <thead><tr><th>Data</th><th>When requested</th>{% if current %}<th>Now</th>{% endif %}{% if item.result %}<th>Deleted</th>{% endif %}</tr></thead>
+        <tbody>
+          {% for label, n in item.preview.items %}
+            <tr><td>{{ label|capfirst }}</td><td>{{ n }}</td>
+              {% if current %}<td>{% for k, v in current.items %}{% if k == label %}<b>{{ v }}</b>{% endif %}{% endfor %}</td>{% endif %}
+              {% if item.result %}<td>{% for k, v in item.result.items %}{% if k == label %}<b>{{ v }}</b>{% endif %}{% endfor %}</td>{% endif %}
+            </tr>
+          {% empty %}
+            <tr><td colspan="4" class="muted">Nothing matched when requested.</td></tr>
+          {% endfor %}
+          {% if item.result %}{% for k, v in item.result.items %}{% if k == "image files" or k == "file errors" %}
+            <tr><td>{{ k|capfirst }}</td><td>-</td>{% if current %}<td></td>{% endif %}<td><b>{{ v }}</b></td></tr>
+          {% endif %}{% endfor %}{% endif %}
+        </tbody>
+      </table>
+    </section>
+
+    {% if item.status == "pending" %}
+      {% if item.requested_by_id == user.id %}
+        <section class="card">
+          <p class="small">You requested this purge, so a different Super Admin must approve it.</p>
+          <form method="post" class="inline">{% csrf_token %}
+            <button type="submit" name="action" value="cancel" class="bad-btn">Cancel request</button>
+          </form>
+        </section>
+      {% else %}
+        <section class="card purge-decide">
+          <h2>Second approval</h2>
+          <p class="small">Approving deletes the data above <b>immediately and permanently</b>. Rejecting deletes nothing.</p>
+          <form method="post" class="stacked">
+            {% csrf_token %}
+            <label>Note <input name="note" placeholder="Required to reject; recommended when approving"></label>
+            <label>Type <b>DELETE</b> to approve <input name="confirm" autocomplete="off"></label>
+            <div class="form-actions">
+              <button type="submit" name="action" value="approve" class="bad-btn">Approve and delete</button>
+              <button type="submit" name="action" value="reject" class="button ghost">Reject</button>
+            </div>
+          </form>
+        </section>
+      {% endif %}
+    {% endif %}
+  </div>
+  <aside class="form-aside">
+    <section class="card">
+      <h2>Two people, on record</h2>
+      <p class="small">The requester and approver must be different Super Admins. Both, the reason, the scope and the counts are kept here and in the audit log permanently.</p>
+    </section>
+  </aside>
+</div>
+{% endblock %}

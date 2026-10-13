@@ -699,3 +699,7 @@ input.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospa
 .help-body h3 { margin: 12px 0 4px; font-size: 14px; }
 ol.help-steps { margin: 0; padding-left: 20px; }
 ol.help-steps li { margin: 5px 0; line-height: 1.5; }
+
+.checkbox-list.tall { max-height: none; }
+.purge-preview { border-left: 3px solid var(--bad); }
+.purge-decide { border-left: 3px solid var(--bad); }

@@ -137,6 +137,15 @@ class DashboardView(LoginRequiredMixin, TemplateView):
                 user, Alert.objects.filter(status=Alert.Status.OPEN)
             ).count()
 
+        if Action.PURGE_EXECUTE in granted:
+            from apps.tracking.models import PurgeRequest
+
+            ctx["pending_purges"] = (
+                PurgeRequest.objects.filter(status=PurgeRequest.Status.PENDING)
+                .exclude(requested_by=user)
+                .count()
+            )
+
         if Action.USER_MANAGE in granted:
             from apps.accounts.models import AccessElevation
 

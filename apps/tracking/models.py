@@ -348,3 +348,85 @@ class DailySummary(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.employee.employee_code} {self.date}"
+
+
+class PurgeRequest(UUIDPrimaryKeyModel, TimeStampedModel):
+    """Early deletion of tracking data, under dual authorisation.
+
+    Data normally leaves only through the nightly retention job. Sometimes it
+    must go sooner - an erasure request, data captured in error, an incident
+    period that must not be kept. That is irreversible and touches biometric
+    data, so it takes two people: one Super Admin requests it with a reason,
+    a *different* Super Admin approves, and only approval executes it.
+
+    The request row and the audit log survive the purge: the record of what
+    was deleted, why and by whom must outlive the data itself. The audit log
+    can never be purged this way.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Awaiting second approval"
+        EXECUTED = "executed", "Approved and executed"
+        REJECTED = "rejected", "Rejected"
+        CANCELLED = "cancelled", "Cancelled by requester"
+        EXPIRED = "expired", "Expired without a decision"
+
+    class Kind(models.TextChoices):
+        MOVEMENT = "movement", "Movement history (presence, movements, daily summaries)"
+        DETECTIONS = "detections", "Raw detections"
+        SNAPSHOTS = "snapshots", "Snapshot images"
+        ALERTS = "alerts", "Alerts"
+        FACE_TEMPLATES = "face_templates", "Enrolled face images and templates"
+
+    # Kinds that only make sense for one person.
+    PERSON_ONLY_KINDS = frozenset({Kind.FACE_TEMPLATES})
+    EXPIRY_DAYS = 7
+
+    employee = models.ForeignKey(
+        "employees.Employee",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="purge_requests",
+        help_text="Blank: everyone's data in the date range.",
+    )
+    # Kept as text so the record stays readable after the employee is gone.
+    employee_code = models.CharField(max_length=32, blank=True)
+    date_from = models.DateField(null=True, blank=True)
+    date_to = models.DateField(null=True, blank=True)
+    kinds = models.JSONField(default=list)
+    reason = models.TextField()
+
+    requested_by = models.ForeignKey(
+        "accounts.User", on_delete=models.PROTECT, related_name="purges_requested"
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    decided_by = models.ForeignKey(
+        "accounts.User", null=True, blank=True, on_delete=models.PROTECT, related_name="purges_decided"
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+
+    preview = models.JSONField(default=dict, blank=True, help_text="Counts when requested.")
+    result = models.JSONField(default=dict, blank=True, help_text="Counts actually deleted.")
+    executed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        who = self.employee_code or "everyone"
+        return f"purge {who} {self.date_from or '...'}-{self.date_to or '...'} ({self.status})"
+
+    @property
+    def scope_label(self) -> str:
+        who = self.employee_code or "Everyone"
+        if self.date_from or self.date_to:
+            return f"{who}, {self.date_from or 'start'} to {self.date_to or 'today'}"
+        return f"{who}, all retained data"
+
+    def kind_labels(self) -> list[str]:
+        labels = dict(self.Kind.choices)
+        return [labels.get(k, k) for k in self.kinds]
